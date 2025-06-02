@@ -27,6 +27,9 @@ import { Table, TableBody, TableCell, TableCaption, TableHead, TableHeader, Tabl
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 
+// Import specific actions from exampleActions.ts
+import { showMessage, anotherAction, updateExampleProgress } from '@/app-logic/exampleActions';
+
 
 const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, depth?: number }> = ({ component, depth = 0 }) => {
   const { type, props, children, id } = component;
@@ -65,7 +68,30 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
       const { onClickAction, ...previewButtonProps } = commonProps;
       let buttonClickHandler = () => {};
       if (props.onClickAction) {
-        buttonClickHandler = () => console.log(`Preview: Button action '${props.onClickAction}' would be triggered.`);
+        const actionString = props.onClickAction as string;
+        if (actionString === 'exampleActions/showMessage') {
+          buttonClickHandler = showMessage;
+        } else if (actionString === 'exampleActions/anotherAction') {
+          buttonClickHandler = anotherAction;
+        } else if (actionString === 'exampleActions/updateExampleProgress') {
+          // For actions requiring state setters, direct execution in preview is complex.
+          // We'll log a more specific message.
+          // The updateExampleProgress from exampleActions expects a setter function.
+          // In a real scenario, we'd need to link this to a specific progress bar's state setter.
+          // For preview simplicity, we'll just log.
+          buttonClickHandler = () => {
+            console.log("Preview: 'exampleActions/updateExampleProgress' would be called. This action normally updates a progress bar by receiving its state setter. In the generated code, you would pass the appropriate setProgressValue function.");
+            // To simulate a random change for any progress bar visible in preview (if needed for visual feedback):
+            // This is a very basic simulation and won't target a specific progress bar linked to this button.
+            // For more accurate preview, a more complex state management for preview would be needed.
+            // For now, we will call the imported function with a dummy setter that just logs.
+            updateExampleProgress((newVal) => console.log(`Preview: updateExampleProgress tried to set progress to ${newVal} (dummy setter).`));
+          };
+        } else if (actionString.includes('/')) {
+          buttonClickHandler = () => console.log(`Preview: Action '${actionString}' from your codebase would be triggered.`);
+        } else {
+           buttonClickHandler = () => console.log(`Preview: Local action '${actionString}' would be triggered (and defined in the generated component).`);
+        }
       }
       return <Button {...previewButtonProps} style={childStyle} onClick={buttonClickHandler}>{props.children || 'Button'}</Button>;
     case 'input':
@@ -268,3 +294,5 @@ const DesignPreviewRenderer: React.FC = () => {
 
 export default DesignPreviewRenderer;
 
+
+    

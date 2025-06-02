@@ -20,9 +20,11 @@ export const showMessage = () => {
  * // ...
  * <Button onClick={() => updateExampleProgress(setProgressValue)}>Update Progress</Button>
  *
- * @param setProgress - The state setter function (e.g., setProgressValue)
+ * @param setProgress - The state setter function (e.g., setProgressValue), correctly typed.
  */
-export const updateExampleProgress = (setProgress: (updater: (prev: number) => number) | ((value: number) => void) ) => {
+export const updateExampleProgress = (
+  setProgress: (value: number | ((prevNumber: number) => number)) => void
+) => {
   const newValue = Math.floor(Math.random() * 101); // Random progress
   console.log(`Setting progress via imported action to: ${newValue}`);
   if (typeof setProgress === 'function') {
@@ -35,3 +37,4 @@ export const updateExampleProgress = (setProgress: (updater: (prev: number) => n
 export const anotherAction = () => {
   console.log("Another action was called!");
 };
+

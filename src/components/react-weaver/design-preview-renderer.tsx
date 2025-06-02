@@ -26,20 +26,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { getComponentConfig } from './available-components';
 import type { AvailableSetters } from '@/app-logic/types';
 
-// Dynamically import all modules from app-logic
 let appLogicModules: Record<string, Record<string, (...args: any[]) => any>> = {};
 
-// Attempt to load modules.
 try {
-  // Forcing dynamic import to be treated as such by webpack/bundler
   const importExampleActions = () => import('@/app-logic/exampleActions');
   
-  // To ensure it's treated as async and allow await
   (async () => {
     try {
-      const exampleActions = await importExampleActions();
+      const exampleActionsModule = await importExampleActions();
+      // Ensure we access the actual exports, handling potential default export wrappers
+      const resolvedExampleActions = exampleActionsModule.default && typeof exampleActionsModule.default === 'object' 
+                                    ? exampleActionsModule.default 
+                                    : exampleActionsModule;
       appLogicModules = {
-        exampleActions: exampleActions.default || exampleActions, // Handle default exports if any
+        exampleActions: resolvedExampleActions,
       };
     } catch (e) {
         console.error("Error during async import of app-logic modules:", e);
@@ -58,7 +58,7 @@ const RenderPreviewComponentRecursive: React.FC<{
   allSetters: AvailableSetters
 }> = ({ component, depth = 0, valueSourceStates, allSetters }) => {
   const { type, props, children, id } = component;
-  let commonProps = { ...props }; // Make a mutable copy
+  let commonProps = { ...props }; 
 
   const childStyle: React.CSSProperties = component.parentId ? {
     position: 'absolute',
@@ -68,26 +68,26 @@ const RenderPreviewComponentRecursive: React.FC<{
     height: component.height,
   } : {};
 
-  let liveValue: any;
+  let liveValue: any; // Used for components that have a primary value linked to valueSource
   if (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource)) {
     liveValue = valueSourceStates[props.valueSource];
   } else {
+    // Fallback for components NOT controlled by valueSource, to use their static prop value
     switch (type) {
         case 'input': liveValue = props.value || ''; break;
         case 'textarea': liveValue = props.value || ''; break;
         case 'checkbox': liveValue = !!props.checked; break;
         case 'switch': liveValue = !!props.checked; break;
-        case 'progress': liveValue = props.value || 0; break;
-        // For other types, liveValue will remain undefined if not from valueSourceStates
+        // progress uses its own logic below, directly checking valueSourceStates or props.value
     }
   }
-
+  
   const [accordionValue, setAccordionValue] = useState<string | string[] | undefined>(props.type === 'multiple' ? [] : props.defaultValue);
   const [radioValue, setRadioValue] = useState<string | undefined>(props.defaultValue);
   const [selectValue, setSelectValue] = useState<string | undefined>(props.value);
   const [tabsValue, setTabsValue] = useState<string | undefined>(props.defaultValue);
 
-  // Local state for components *not* controlled by valueSource
+  // Local state for input-like components when NOT controlled by valueSource
   const [localInputValue, setLocalInputValue] = useState<string>(props.value || '');
   const [localTextareaValue, setLocalTextareaValue] = useState<string>(props.value || '');
   const [localCheckboxChecked, setLocalCheckboxChecked] = useState<boolean>(!!props.checked);
@@ -109,7 +109,7 @@ const RenderPreviewComponentRecursive: React.FC<{
           alert(`Error in action ${moduleName}/${funcName}: ${error instanceof Error ? error.message : String(error)}`);
         }
       } else {
-        console.warn(`Preview: Action module or function '${actionString}' not found. Loaded modules:`, Object.keys(appLogicModules));
+        console.warn(`Preview: Action module '${moduleName}' or function '${funcName}' not found. Loaded modules:`, Object.keys(appLogicModules), appLogicModules);
         alert(`Action '${actionString}' not found. Make sure it's exported from src/app-logic/${moduleName}.ts and that the file is loaded.`);
       }
     } else {
@@ -118,7 +118,7 @@ const RenderPreviewComponentRecursive: React.FC<{
     }
   };
   
-  const getSetterForValueSource = (valueSourceName: string): ((value: any) => void) | undefined => {
+  const getSetterForValueSource = (valueSourceName?: string): ((value: any) => void) | undefined => {
     if (!valueSourceName) return undefined;
     const setterName = `set${valueSourceName.charAt(0).toUpperCase() + valueSourceName.slice(1)}`;
     return allSetters[setterName];
@@ -309,7 +309,6 @@ const RenderPreviewComponentRecursive: React.FC<{
 
 const DesignPreviewRenderer: React.FC = () => {
   const { components: designComponents, canvasSize } = useDesign();
-
   const [valueSourceStates, setValueSourceStates] = useState<Record<string, any>>({});
 
   const uniqueValueSources = useMemo(() => {
@@ -332,6 +331,8 @@ const DesignPreviewRenderer: React.FC = () => {
     const newInitialStates: Record<string, any> = {};
     let updateNeeded = false;
 
+    const currentDesignComponents = designComponents; // Capture current designComponents
+
     uniqueValueSources.forEach(sourceName => {
       if (!valueSourceStates.hasOwnProperty(sourceName)) {
         updateNeeded = true;
@@ -348,7 +349,7 @@ const DesignPreviewRenderer: React.FC = () => {
             }
             return undefined;
         };
-        compWithValueSource = findComp(designComponents);
+        compWithValueSource = findComp(currentDesignComponents); // Use captured designComponents
 
         if (compWithValueSource) {
           const compConfig = getComponentConfig(compWithValueSource.type);
@@ -360,12 +361,12 @@ const DesignPreviewRenderer: React.FC = () => {
             initialValue = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? '');
           } else if (compWithValueSource.type === 'checkbox' || compWithValueSource.type === 'switch') {
              initialValue = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);
-          } else { // Generic fallback
+          } else { 
             if (props.value !== undefined) initialValue = props.value;
             else if (props.checked !== undefined) initialValue = props.checked;
             else if (compConfig?.propTypes.value?.defaultValue !== undefined) initialValue = compConfig.propTypes.value.defaultValue;
             else if (compConfig?.propTypes.checked?.defaultValue !== undefined) initialValue = compConfig.propTypes.checked.defaultValue;
-            else initialValue = null; // Default to null if no other value found
+            else initialValue = null; 
           }
         }
         newInitialStates[sourceName] = initialValue;
@@ -375,7 +376,7 @@ const DesignPreviewRenderer: React.FC = () => {
     if (updateNeeded) {
       setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources, designComponents]); // Corrected dependency array
+  }, [uniqueValueSources]); // Now only depends on uniqueValueSources
 
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
@@ -394,7 +395,7 @@ const DesignPreviewRenderer: React.FC = () => {
       };
     });
     return setters;
-  }, [uniqueValueSources]);
+  }, [uniqueValueSources]); // Depends on uniqueValueSources and setValueSourceStates (implicitly, as setter is stable)
 
 
   const previewContainerStyle: React.CSSProperties = {
@@ -433,3 +434,4 @@ const DesignPreviewRenderer: React.FC = () => {
 
 export default DesignPreviewRenderer;
 
+    

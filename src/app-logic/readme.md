@@ -21,32 +21,29 @@ This directory (`src/app-logic/`) is where you can define custom TypeScript func
       // Process form data
     };
 
-    // Example of an action that might interact with state passed from the component
-    export const incrementCounter = (setCounter: (updater: (prev: number) => number) => void) => {
-      setCounter(prev => prev + 1);
+    // Example of an action that interacts with state passed from the component
+    export const updateProgress = (
+        setProgress: (value: number | ((prev: number) => number)) => void, 
+        newValue: number
+    ) => {
+      setProgress(newValue);
     };
     ```
 
 3.  **Link in React Weaver**:
     *   For a **Button** component, set its `onClickAction` prop in the React Weaver editor to `yourFileName/yourFunctionName`.
         *   Example: If your file is `myButtonLogic.ts` and your function is `handleLogin`, you would set `onClickAction` to `myButtonLogic/handleLogin`.
-    *   The generated React component will automatically import `handleLogin` from `@/app-logic/myButtonLogic` and assign it to the button's `onClick` handler.
+    *   The generated React component will automatically import `handleLogin` from `@/app-logic/myButtonLogic` and assign it to the button's `onClick` handler *if the function takes no arguments*.
 
 ## Interacting with Component State
 
 -   Components like the **Progress Bar** can have their `value` driven by a state variable defined by the `valueSource` prop (e.g., `uploadProgress`). This creates a `useState` hook in the generated UI component (e.g., `const [uploadProgress, setUploadProgress] = useState(0);`).
--   If your external functions in `src/app-logic/` need to modify such state, you'll need to pass the state setter function to them.
+-   If your external functions in `src/app-logic/` need to modify such state (or require other arguments), you'll need to pass the state setter function (and any other arguments) to them.
 
-    For instance, if a button's `onClickAction` is `myActions/updateProgress`, and `myActions.ts` contains:
-    ```typescript
-    // src/app-logic/myActions.ts
-    export const updateProgress = (setProgress) => {
-      // ... some logic ...
-      const newProgress = 75;
-      setProgress(newProgress);
-    };
-    ```
-    In the generated code, you might manually adjust the button's `onClick` to:
-    `onClick={() => updateProgress(setUploadProgress)}` (assuming `setUploadProgress` is the setter for the progress bar's state).
+    For instance, if a button's `onClickAction` is `myActions/updateProgress` (using the example above), the generated code for the button might initially be:
+    `onClick={updateProgress}`
+
+    You would manually adjust the button's `onClick` in the generated code to pass the necessary arguments:
+    `onClick={() => updateProgress(setUploadProgress, 75)}` (assuming `setUploadProgress` is the setter for the progress bar's state, and you want to set it to 75).
 
 This setup allows for a clean separation of your UI design (in React Weaver) and your application logic (in `src/app-logic/`).

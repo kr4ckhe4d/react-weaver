@@ -11,57 +11,33 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { IconLayers, IconTrash, IconPlusCircle, IconSettings } from './icons'; // Assuming IconLayers for z-index
+import { IconLayers, IconTrash } from './icons'; // Removed IconSettings, IconPlusCircle
 import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
 
 const PropEditorPanel: React.FC = () => {
-  const { selectedComponentId, components, updateComponentProps, deleteComponent, bringToFront, sendToBack, suggestProps, isLoadingAi } = useDesign();
-  const { toast } = useToast();
-  const [suggestedProps, setSuggestedProps] = useState<Record<string, any> | null>(null);
+  const { selectedComponentId, components, updateComponentProps, deleteComponent, bringToFront, sendToBack } = useDesign();
+  // Removed suggestProps, isLoadingAi from useDesign()
+  // Removed toast usage related to AI suggestions
 
   const selectedComponent = components.find(comp => comp.id === selectedComponentId);
   const componentConfig = selectedComponent ? getComponentConfig(selectedComponent.type) : null;
+
+  // Removed suggestedProps state and related useEffect
 
   const handleInputChange = (propName: string, value: any) => {
     if (!selectedComponentId) return;
     updateComponentProps(selectedComponentId, { [propName]: value });
   };
 
-  const handleSuggestion = async () => {
-    if (!selectedComponent || !componentConfig) return;
-    setSuggestedProps(null); // Clear previous suggestions
-    const newSuggestions = await suggestProps(selectedComponent.type, selectedComponent.props);
-    if (Object.keys(newSuggestions).length > 0) {
-      setSuggestedProps(newSuggestions);
-      toast({ title: "Prop Suggestions", description: "AI has suggested some props." });
-    } else {
-      toast({ title: "Prop Suggestions", description: "No new props suggested by AI." });
-    }
-  };
-
-  const applySuggestedProp = (propName: string, propValue: any) => {
-    if (!selectedComponentId) return;
-    updateComponentProps(selectedComponentId, { [propName]: propValue });
-    // Remove applied suggestion
-    if (suggestedProps) {
-      const { [propName]: _, ...remainingSuggestions } = suggestedProps;
-      setSuggestedProps(Object.keys(remainingSuggestions).length > 0 ? remainingSuggestions : null);
-    }
-  };
-
-  useEffect(() => {
-    // Clear suggestions when component changes
-    setSuggestedProps(null);
-  }, [selectedComponentId]);
-
+  // Removed handleSuggestion and applySuggestedProp functions
 
   const renderPropField = (propName: string, propDef: PropDefinition, currentValue: any) => {
     const key = `${selectedComponentId}-${propName}`;
     switch (propDef.type) {
       case 'string':
-      case 'color': // Simple text input for color for now
-      case 'number': // HTML input type="number" handles this
+      case 'color': 
+      case 'number': 
         return (
           <Input
             id={key}
@@ -108,8 +84,7 @@ const PropEditorPanel: React.FC = () => {
                 const parsed = JSON.parse(e.target.value);
                 handleInputChange(propName, parsed);
               } catch (err) {
-                // Allow typing invalid JSON temporarily, or show error
-                handleInputChange(propName, e.target.value); // Store as string if invalid
+                handleInputChange(propName, e.target.value); 
               }
             }}
             rows={3}
@@ -165,36 +140,7 @@ const PropEditorPanel: React.FC = () => {
             </div>
           ))}
           
-          <Separator />
-          <div>
-            <h4 className="font-medium text-sm mb-2 flex items-center">
-              <IconSettings className="mr-2 h-4 w-4" />
-              AI Prop Suggestions
-            </h4>
-            <Button onClick={handleSuggestion} disabled={isLoadingAi} size="sm" variant="outline" className="w-full">
-              {isLoadingAi ? 'Thinking...' : 'Suggest Props with AI'}
-            </Button>
-            {suggestedProps && Object.keys(suggestedProps).length > 0 && (
-              <div className="mt-3 space-y-2 border border-dashed p-3 rounded-md bg-accent/10">
-                <p className="text-xs text-muted-foreground">Click to apply suggested prop:</p>
-                {Object.entries(suggestedProps).map(([propName, propValue]) => (
-                  <Button
-                    key={propName}
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-left text-xs"
-                    onClick={() => applySuggestedProp(propName, propValue)}
-                  >
-                    <IconPlusCircle className="mr-2 h-3 w-3 text-green-500"/> {propName}: {typeof propValue === 'object' ? JSON.stringify(propValue) : String(propValue)}
-                  </Button>
-                ))}
-              </div>
-            )}
-             {suggestedProps && Object.keys(suggestedProps).length === 0 && !isLoadingAi && (
-                <p className="text-xs text-muted-foreground mt-2 text-center">No new props suggested.</p>
-             )}
-          </div>
-
+          {/* Removed AI Prop Suggestions section */}
         </CardContent>
       </ScrollArea>
     </Card>

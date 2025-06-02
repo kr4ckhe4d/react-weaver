@@ -1,5 +1,6 @@
+
 import {
-  MousePointerSquare,
+  MousePointerSquareDashed,
   Type,
   Image as LucideImage,
   ToggleLeft,
@@ -40,7 +41,7 @@ export const IconCopy = Copy;
 export const IconText = Type;
 export const IconImage = LucideImage;
 export const IconInput = Square; // Placeholder for Input/Text Field
-export const IconButton = MousePointerSquare;
+export const IconButton = MousePointerSquareDashed; // Changed from MousePointerSquare
 export const IconCard = Columns; // Placeholder for Card
 export const IconSwitch = ToggleLeft;
 export const IconSlider = SlidersHorizontal;

@@ -3,8 +3,9 @@
 import type { CanvasComponent } from '@/types';
 import { AVAILABLE_COMPONENTS, GRID_SIZE, getComponentConfig } from '@/components/react-weaver/available-components';
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import { generateCode as generateCodeFlow } from '@/ai/flows/generate-code-from-ui';
-import { suggestComponentProps as suggestPropsFlow } from '@/ai/flows/suggest-component-props';
+// Removed AI flow imports as Gemini API dependency is removed
+// import { generateCode as generateCodeFlow } from '@/ai/flows/generate-code-from-ui';
+// import { suggestComponentProps as suggestPropsFlow } from '@/ai/flows/suggest-component-props';
 
 interface DesignContextType {
   components: CanvasComponent[];
@@ -20,7 +21,7 @@ interface DesignContextType {
   getDesignJSON: () => string;
   generateCode: () => Promise<string>;
   suggestProps: (componentType: string, currentProps: Record<string, any>) => Promise<Record<string, any>>;
-  isLoadingAi: boolean;
+  // isLoadingAi: boolean; // Removed as AI features are disabled
   canvasSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
 }
@@ -30,7 +31,7 @@ const DesignContext = createContext<DesignContextType | undefined>(undefined);
 export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [components, setComponents] = useState<CanvasComponent[]>([]);
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
-  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  // const [isLoadingAi, setIsLoadingAi] = useState(false); // Removed
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 }); // Default, can be dynamic
 
   const snapToGrid = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
@@ -104,20 +105,17 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (minZIndex !== Infinity && minZIndex > 1) {
         targetZIndex = minZIndex -1;
       } else if (prev.length > 1) {
-         // If it's already the lowest or only one other item, try to find a free slot or make it 1
          const sortedZIndexes = [...new Set(prev.map(c => c.zIndex))].sort((a,b) => a-b);
          if (sortedZIndexes[0] > 1) targetZIndex = sortedZIndexes[0] -1;
-         else targetZIndex = 1; // Could cause conflict if 1 is taken by non-target, handled by re-sorting later if needed
+         else targetZIndex = 1;
       }
       
       return prev.map(comp => {
         if (comp.id === id) {
           return { ...comp, zIndex: targetZIndex };
         }
-        // Potentially shift other components if we want to maintain unique z-indices strictly and avoid gaps
-        // For now, simple assignment. Re-ordering might be needed for strict layer mgmt.
         return comp;
-      }).sort((a,b) => a.zIndex - b.zIndex); // Re-sort to reflect visual order
+      }).sort((a,b) => a.zIndex - b.zIndex);
     });
   }, []);
 
@@ -130,30 +128,13 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [components, canvasSize]);
 
   const generateCode = async () => {
-    setIsLoadingAi(true);
-    try {
-      const uiDesignJson = getDesignJSON();
-      const result = await generateCodeFlow({ uiDesignJson });
-      return result.reactCode;
-    } catch (error) {
-      console.error("Error generating code:", error);
-      return `// Error generating code: ${error instanceof Error ? error.message : String(error)}`;
-    } finally {
-      setIsLoadingAi(false);
-    }
+    // AI code generation is disabled.
+    return Promise.resolve("// AI-powered code generation has been disabled.");
   };
   
   const suggestProps = async (componentType: string, currentProps: Record<string, any>) => {
-    setIsLoadingAi(true);
-    try {
-      const result = await suggestPropsFlow({ componentName: componentType, existingProps: currentProps });
-      return result;
-    } catch (error) {
-      console.error("Error suggesting props:", error);
-      return {};
-    } finally {
-      setIsLoadingAi(false);
-    }
+    // AI prop suggestion is disabled.
+    return Promise.resolve({});
   };
 
   return (
@@ -172,7 +153,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         getDesignJSON,
         generateCode,
         suggestProps,
-        isLoadingAi,
+        // isLoadingAi, // Removed
         canvasSize,
         setCanvasSize,
       }}

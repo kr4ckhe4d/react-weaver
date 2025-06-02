@@ -67,7 +67,9 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
       const { onClickAction, ...buttonRenderProps } = commonProps;
       return <Button {...buttonRenderProps}>{props.children || 'Button'}</Button>;
     case 'input':
-      return <Input {...commonProps} className={cn("w-full h-full", props.className)} />;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource: _valueSourceInput, ...inputRenderProps } = commonProps;
+      return <Input {...inputRenderProps} className={cn("w-full h-full", props.className)} />;
     case 'text':
       return <p {...commonProps} className={cn("p-1 select-none", props.className)}>{props.children || 'Text Block'}</p>;
     case 'card':
@@ -92,18 +94,22 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
     case 'image':
       return <img src={props.src} alt={props.alt} {...commonProps} className={cn("w-full h-full object-contain", props.className)} data-ai-hint={props['data-ai-hint']}/>;
     case 'checkbox':
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { valueSource: _valueSourceCheckbox, ...checkboxRenderProps } = commonProps;
         return (
             <div className="flex items-center space-x-2 p-1">
-                <Checkbox id={`${component.id}-checkbox`} checked={props.checked} {...commonProps} />
+                <Checkbox id={`${component.id}-checkbox`} checked={props.checked} {...checkboxRenderProps} />
                 <label htmlFor={`${component.id}-checkbox`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                     {props.label || "Checkbox"}
                 </label>
             </div>
         );
     case 'switch':
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { valueSource: _valueSourceSwitch, ...switchRenderProps } = commonProps;
         return (
              <div className="flex items-center space-x-2 p-1">
-                <Switch id={`${component.id}-switch`} checked={props.checked} {...commonProps} />
+                <Switch id={`${component.id}-switch`} checked={props.checked} {...switchRenderProps} />
                 <label htmlFor={`${component.id}-switch`}>{props.label || "Toggle"}</label>
             </div>
         );
@@ -137,10 +143,12 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
     case 'badge':
       return <Badge variant={props.variant} className={cn(props.className)} {...commonProps}>{props.children || 'Badge'}</Badge>;
     case 'label':
-      return <Label className={cn("p-1", props.className)} {...commonProps}>{props.children || 'Label'}</Label>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource: _valueSourceLabel, ...labelRenderProps } = commonProps;
+      return <Label className={cn("p-1", props.className)} {...labelRenderProps}>{props.children || 'Label'}</Label>;
     case 'progress':
        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valueSource, ...progressRenderProps } = commonProps;
+      const { valueSource: _valueSourceProgress, ...progressRenderProps } = commonProps;
       return <Progress {...progressRenderProps} className={cn("w-full", props.className)} />;
     case 'radioGroup':
       return (
@@ -226,7 +234,9 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
             </Tabs>
         );
     case 'textarea':
-      return <Textarea placeholder={props.placeholder} className={cn("w-full h-full", props.className)} {...commonProps} />;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource: _valueSourceTextarea, ...textareaRenderProps } = commonProps;
+      return <Textarea placeholder={props.placeholder} className={cn("w-full h-full", props.className)} {...textareaRenderProps} />;
     default:
       return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2">Unknown component: {type}</div>;
   }

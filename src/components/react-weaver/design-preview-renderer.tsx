@@ -71,12 +71,14 @@ const RenderPreviewComponentRecursive: React.FC<{
   if (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource)) {
     liveValue = valueSourceStates[props.valueSource];
   } else {
+    // Fallback for components not (yet) fully controlled by valueSource in preview if needed
     switch (type) {
         case 'input': liveValue = props.value || ''; break;
         case 'textarea': liveValue = props.value || ''; break;
         case 'checkbox': liveValue = !!props.checked; break;
         case 'switch': liveValue = !!props.checked; break;
         case 'label': liveValue = props.children || ''; break; 
+        // For progress, initial static value is handled by valueSourceStates initialization
     }
   }
   
@@ -85,6 +87,7 @@ const RenderPreviewComponentRecursive: React.FC<{
   const [selectValue, setSelectValue] = useState<string | undefined>(props.value);
   const [tabsValue, setTabsValue] = useState<string | undefined>(props.defaultValue);
 
+  // Local state for uncontrolled components or when valueSource is not used
   const [localInputValue, setLocalInputValue] = useState<string>(props.value || '');
   const [localTextareaValue, setLocalTextareaValue] = useState<string>(props.value || '');
   const [localCheckboxChecked, setLocalCheckboxChecked] = useState<boolean>(!!props.checked);
@@ -110,6 +113,8 @@ const RenderPreviewComponentRecursive: React.FC<{
         alert(`Action '${actionString}' not found. Make sure it's exported from src/app-logic/${moduleName}.ts and that the file is loaded.`);
       }
     } else {
+       // For local actions (not fileName/functionName format), just log.
+       // The primary purpose of preview is to test linked functions.
        console.log(`Preview: Local action '${actionString}' would be triggered (not supported in preview for direct execution).`);
        alert(`Local actions like '${actionString}' are for generated code. Use 'fileName/functionName' for preview execution.`);
     }
@@ -127,8 +132,10 @@ const RenderPreviewComponentRecursive: React.FC<{
       const { onClickAction: _onClickActionIgnoredButton, ...previewButtonProps } = commonProps;
       return <Button {...previewButtonProps} style={childStyle} onClick={handleAction}>{props.children || 'Button'}</Button>;
     case 'input':
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource: _valueSourceIgnoredInput, ...inputPreviewProps } = commonProps;
       const inputSetter = getSetterForValueSource(props.valueSource);
-      return <Input {...commonProps} 
+      return <Input {...inputPreviewProps} 
                 value={props.valueSource ? liveValue : localInputValue}
                 onChange={(e) => inputSetter ? inputSetter(e.target.value) : setLocalInputValue(e.target.value)}
                 className={cn("w-full h-full", props.className)} style={childStyle} />;
@@ -152,26 +159,30 @@ const RenderPreviewComponentRecursive: React.FC<{
     case 'image':
       return <img src={props.src} alt={props.alt} {...commonProps} className={cn("w-full h-full object-contain", props.className)} style={childStyle} data-ai-hint={props['data-ai-hint']} />;
     case 'checkbox':
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { valueSource: _valueSourceIgnoredCheckbox, ...checkboxPreviewProps } = commonProps;
         const checkboxSetter = getSetterForValueSource(props.valueSource);
         return (
             <div className="flex items-center space-x-2 p-1" style={childStyle}>
                 <Checkbox id={`${id}-preview-checkbox`}
                     checked={props.valueSource ? liveValue : localCheckboxChecked}
                     onCheckedChange={(checked) => checkboxSetter ? checkboxSetter(Boolean(checked)) : setLocalCheckboxChecked(Boolean(checked))}
-                    {...commonProps} />
+                    {...checkboxPreviewProps} />
                 <label htmlFor={`${id}-preview-checkbox`} className="text-sm font-medium leading-none">
                     {props.label || "Checkbox"}
                 </label>
             </div>
         );
     case 'switch':
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { valueSource: _valueSourceIgnoredSwitch, ...switchPreviewProps } = commonProps;
         const switchSetter = getSetterForValueSource(props.valueSource);
         return (
              <div className="flex items-center space-x-2 p-1" style={childStyle}>
                 <Switch id={`${id}-preview-switch`}
                     checked={props.valueSource ? liveValue : localSwitchChecked}
                     onCheckedChange={(checked) => switchSetter ? switchSetter(checked) : setLocalSwitchChecked(checked)}
-                    {...commonProps} />
+                    {...switchPreviewProps} />
                 <label htmlFor={`${id}-preview-switch`}>{props.label || "Toggle"}</label>
             </div>
         );
@@ -299,11 +310,13 @@ const RenderPreviewComponentRecursive: React.FC<{
             </Tabs>
         );
     case 'textarea':
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource: _valueSourceIgnoredTextarea, ...textareaPreviewProps } = commonProps;
       const textareaSetter = getSetterForValueSource(props.valueSource);
       return <Textarea placeholder={props.placeholder}
                  value={props.valueSource ? liveValue : localTextareaValue}
                  onChange={(e) => textareaSetter ? textareaSetter(e.target.value) : setLocalTextareaValue(e.target.value)}
-                 className={cn("w-full h-full", props.className)} style={childStyle} {...commonProps} />;
+                 className={cn("w-full h-full", props.className)} style={childStyle} {...textareaPreviewProps} />;
     default:
       return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2" style={childStyle}>Unknown component: {type}</div>;
   }
@@ -366,12 +379,13 @@ const DesignPreviewRenderer: React.FC = () => {
           } else if (compWithValueSource.type === 'label') {
              initialValue = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');
           } else { 
+            // Generic fallback for other potential valueSource-enabled components
             if (props.value !== undefined) initialValue = props.value;
             else if (props.checked !== undefined) initialValue = props.checked;
             else if (compConfig?.propTypes.value?.defaultValue !== undefined) initialValue = compConfig.propTypes.value.defaultValue;
             else if (compConfig?.propTypes.checked?.defaultValue !== undefined) initialValue = compConfig.propTypes.checked.defaultValue;
-            else if (compConfig?.propTypes.children?.defaultValue !== undefined) initialValue = String(compConfig.propTypes.children.defaultValue);
-            else initialValue = null; 
+            else if (compConfig?.propTypes.children?.defaultValue !== undefined) initialValue = String(compConfig.propTypes.children.defaultValue); // For Label compatibility
+            else initialValue = null; // Default if no other default found
           }
         }
         newInitialStates[sourceName] = initialValue;
@@ -381,7 +395,7 @@ const DesignPreviewRenderer: React.FC = () => {
     if (updateNeeded) {
       setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources]); 
+  }, [uniqueValueSources]); // Removed designComponents dependency
 
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
@@ -400,7 +414,7 @@ const DesignPreviewRenderer: React.FC = () => {
       };
     });
     return setters;
-  }, [uniqueValueSources]); 
+  }, [uniqueValueSources]); // Depends only on uniqueValueSources
 
 
   const previewContainerStyle: React.CSSProperties = {
@@ -438,3 +452,4 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
+

@@ -49,7 +49,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
         defaultValue: 'default',
         label: 'Size'
       },
-      onClickAction: { type: 'string', label: 'onClick Action Name', defaultValue: '' },
+      onClickAction: { type: 'string', label: 'onClick Action (e.g. localAction or logicFile/importedAction)', defaultValue: '' },
     },
   },
   {
@@ -171,7 +171,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     name: 'Badge',
     icon: IconBadge,
     defaultProps: { children: 'Badge', variant: 'default' },
-    defaultSize: { width: 80, height: 28 }, 
+    defaultSize: { width: 80, height: 28 },
     propTypes: {
       children: { type: 'string', defaultValue: 'Badge', label: 'Text' },
       variant: { type: 'select', options: ['default', 'secondary', 'destructive', 'outline'], defaultValue: 'default', label: 'Variant' },
@@ -236,7 +236,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     name: 'Separator',
     icon: IconSeparator,
     defaultProps: { orientation: 'horizontal' },
-    defaultSize: { width: 200, height: 1 }, 
+    defaultSize: { width: 200, height: 1 },
     propTypes: {
       orientation: { type: 'select', options: ['horizontal', 'vertical'], defaultValue: 'horizontal', label: 'Orientation (Note: Resize to change visual orientation)' },
     },
@@ -245,7 +245,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     id: 'skeleton',
     name: 'Skeleton',
     icon: IconSkeleton,
-    defaultProps: { className: 'h-4 w-full rounded-md' }, 
+    defaultProps: { className: 'h-4 w-full rounded-md' },
     defaultSize: { width: 200, height: 20 },
     propTypes: {
       className: { type: 'string', defaultValue: 'h-4 w-full rounded-md', label: 'Tailwind Classes for appearance' },

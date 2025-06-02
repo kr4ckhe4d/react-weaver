@@ -49,7 +49,7 @@ const ReactWeaverApp: React.FC = () => {
             <PropEditorPanel />
           </main>
         </TabsContent>
-        <TabsContent value="preview" className="flex-1 overflow-hidden mt-0 p-4 bg-muted/20">
+        <TabsContent value="preview" className="flex-1 overflow-hidden mt-0 bg-muted/20">
           {components.length > 0 ? (
             <DesignPreviewRenderer />
           ) : (

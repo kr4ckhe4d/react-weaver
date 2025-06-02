@@ -12,19 +12,16 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // This function is a simplified version of renderComponent from CanvasItemRenderer
-// It's focused purely on rendering the component's visual aspect.
+// It's focused purely on rendering the component's visual aspect and interactivity.
 const renderPreviewComponent = (component: CanvasComponent) => {
   const { type, props } = component;
-  // Props passed to components here should not include interactive editing-related attributes
-  // like `id` if they are not meant to be part of the final rendered component's DOM attributes.
-  // However, for keying and basic rendering, `id` is fine for now.
   const commonProps = { ...props }; 
 
   switch (type) {
     case 'button':
       return <Button {...commonProps}>{props.children || 'Button'}</Button>;
     case 'input':
-      return <Input {...commonProps} className={cn("w-full h-full", props.className)} readOnly />;
+      return <Input {...commonProps} className={cn("w-full h-full", props.className)} />;
     case 'text':
       return <p {...commonProps} className={cn("p-1", props.className)}>{props.children || 'Text Block'}</p>;
     case 'card':
@@ -44,7 +41,7 @@ const renderPreviewComponent = (component: CanvasComponent) => {
     case 'checkbox':
         return (
             <div className="flex items-center space-x-2 p-1">
-                <Checkbox id={`${component.id}-preview-checkbox`} checked={props.checked} {...commonProps} disabled />
+                <Checkbox id={`${component.id}-preview-checkbox`} checked={props.checked} {...commonProps} />
                 <label htmlFor={`${component.id}-preview-checkbox`} className="text-sm font-medium leading-none">
                     {props.label || "Checkbox"}
                 </label>
@@ -53,7 +50,7 @@ const renderPreviewComponent = (component: CanvasComponent) => {
     case 'switch':
         return (
              <div className="flex items-center space-x-2 p-1">
-                <Switch id={`${component.id}-preview-switch`} checked={props.checked} {...commonProps} disabled />
+                <Switch id={`${component.id}-preview-switch`} checked={props.checked} {...commonProps} />
                 <label htmlFor={`${component.id}-preview-switch`}>{props.label || "Toggle"}</label>
             </div>
         );
@@ -70,18 +67,15 @@ const DesignPreviewRenderer: React.FC = () => {
   const previewContainerStyle: React.CSSProperties = {
     width: `${canvasSize.width}px`,
     height: `${canvasSize.height}px`,
-    // Ensuring the preview area itself is visible and scrollable if content exceeds viewport
-    minWidth: '100%', 
-    minHeight: '100%',
     position: 'relative',
-    backgroundColor: 'hsl(var(--background))', // Use theme background
-    boxShadow: '0 0 10px rgba(0,0,0,0.1)', // Optional: subtle shadow for the "page"
-    margin: 'auto', // Center the preview area if smaller than tab content
+    backgroundColor: 'hsl(var(--background))', 
+    boxShadow: '0 0 10px rgba(0,0,0,0.1)', 
+    margin: 'auto', 
   };
 
   return (
     <ScrollArea className="w-full h-full bg-muted/20">
-        <div style={previewContainerStyle} className="overflow-auto">
+        <div style={previewContainerStyle}>
             {components.map((comp) => (
             <div
                 key={`preview-${comp.id}`}
@@ -93,7 +87,6 @@ const DesignPreviewRenderer: React.FC = () => {
                 height: comp.height,
                 zIndex: comp.zIndex,
                 }}
-                className="pointer-events-none" // Prevent interaction with elements in preview if not desired
             >
                 {renderPreviewComponent(comp)}
             </div>

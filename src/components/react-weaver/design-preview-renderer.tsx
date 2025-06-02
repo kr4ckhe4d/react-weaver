@@ -49,11 +49,25 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
   const [textareaValue, setTextareaValue] = useState<string>(props.value || '');
   const [checkboxChecked, setCheckboxChecked] = useState<boolean>(!!props.checked);
   const [switchChecked, setSwitchChecked] = useState<boolean>(!!props.checked);
+  const [progressValue, setProgressValue] = useState<number>(props.value !== undefined ? props.value : 0); // For progress with valueSource
+
+  // Simulate state for progress bar if valueSource is used
+  React.useEffect(() => {
+    if (props.valueSource && props.value !== undefined) {
+      setProgressValue(props.value);
+    }
+  }, [props.value, props.valueSource]);
 
 
   switch (type) {
     case 'button':
-      return <Button {...commonProps} style={childStyle}>{props.children || 'Button'}</Button>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { onClickAction, ...previewButtonProps } = commonProps;
+      let buttonClickHandler = () => {};
+      if (props.onClickAction) {
+        buttonClickHandler = () => console.log(`Preview: Button action '${props.onClickAction}' would be triggered.`);
+      }
+      return <Button {...previewButtonProps} style={childStyle} onClick={buttonClickHandler}>{props.children || 'Button'}</Button>;
     case 'input':
       return <Input {...commonProps} value={inputValue} onChange={(e) => setInputValue(e.target.value)} className={cn("w-full h-full", props.className)} style={childStyle} />;
     case 'text':
@@ -94,7 +108,6 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
     case 'placeholder':
         return <div className={cn("w-full h-full bg-muted/50 border border-dashed border-foreground/30 flex items-center justify-center text-muted-foreground", props.className)} style={childStyle}>{props.text || "Placeholder"}</div>;
     
-    // New components
     case 'accordion':
       return (
         <Accordion type={props.type as "single" | "multiple"} collapsible={props.collapsible} value={accordionValue} onValueChange={setAccordionValue} className={cn("w-full", props.className)} style={childStyle} {...commonProps}>
@@ -125,7 +138,10 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
     case 'label':
       return <Label className={cn("p-1", props.className)} style={childStyle} {...commonProps}>{props.children || 'Label'}</Label>;
     case 'progress':
-      return <Progress value={props.value} className={cn("w-full", props.className)} style={childStyle} {...commonProps} />;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource, ...progressPreviewProps } = commonProps;
+      const currentProgressValue = props.valueSource ? progressValue : props.value;
+      return <Progress value={currentProgressValue} className={cn("w-full", props.className)} style={childStyle} {...progressPreviewProps} />;
     case 'radioGroup':
       return (
         <RadioGroup value={radioValue} onValueChange={setRadioValue} className={cn("p-2 space-y-2", props.className)} style={childStyle} {...commonProps}>
@@ -251,3 +267,4 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
+

@@ -63,7 +63,9 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
   
   switch (type) {
     case 'button':
-      return <Button {...commonProps}>{props.children || 'Button'}</Button>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { onClickAction, ...buttonRenderProps } = commonProps;
+      return <Button {...buttonRenderProps}>{props.children || 'Button'}</Button>;
     case 'input':
       return <Input {...commonProps} className={cn("w-full h-full", props.className)} />;
     case 'text':
@@ -137,7 +139,9 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
     case 'label':
       return <Label className={cn("p-1", props.className)} {...commonProps}>{props.children || 'Label'}</Label>;
     case 'progress':
-      return <Progress value={props.value} className={cn("w-full", props.className)} {...commonProps} />;
+       // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource, ...progressRenderProps } = commonProps;
+      return <Progress {...progressRenderProps} className={cn("w-full", props.className)} />;
     case 'radioGroup':
       return (
         <RadioGroup defaultValue={props.defaultValue} className={cn("p-2 space-y-2", props.className)} {...commonProps}>
@@ -238,8 +242,8 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
   const itemStartPos = useRef({ x: 0, y: 0 });
 
   const componentConfig = getComponentConfig(component.type);
-  const minWidth = componentConfig?.defaultSize.width ? Math.max(GRID_SIZE, componentConfig.defaultSize.width / 4) : GRID_SIZE; // Reduced min constraint slightly
-  const minHeight = componentConfig?.defaultSize.height ? Math.max(GRID_SIZE, componentConfig.defaultSize.height / 4) : GRID_SIZE; // Reduced min constraint slightly
+  const minWidth = componentConfig?.defaultSize.width ? Math.max(GRID_SIZE, componentConfig.defaultSize.width / 4) : GRID_SIZE; 
+  const minHeight = componentConfig?.defaultSize.height ? Math.max(GRID_SIZE, componentConfig.defaultSize.height / 4) : GRID_SIZE; 
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const targetElement = e.target as HTMLElement;
@@ -248,26 +252,22 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
       return; 
     }
     
-    // Prevent drag if clicking on interactive form elements within this component,
-    // unless it's the component itself (e.g. clicking a button to select it)
-    // This needs careful handling if the interactive element is nested.
     const interactiveParent = targetElement.closest('button, input, textarea, select, [role="button"], [role="tab"], [role="radio"]');
     const componentRootElement = targetElement.closest<HTMLElement>('[data-component-id]');
 
     if (interactiveParent && componentRootElement && interactiveParent !== componentRootElement && componentRootElement.dataset.componentId === component.id) {
-        // Clicked on an interactive child of the current component, allow default behavior
-        // but still select the parent component if not already selected.
         if (!isSelected) {
           selectComponent(component.id);
           if (!component.parentId) bringToFront(component.id);
         }
+        // Do not preventDefault or stopPropagation if an interactive child was clicked
         return;
     }
     
     if (componentRootElement && componentRootElement.dataset.componentId !== component.id) {
-      // Clicked on a child of a different component, let its own handler manage it.
       return; 
     }
+
     e.preventDefault(); 
     e.stopPropagation(); 
 
@@ -387,12 +387,8 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
                 
                 const clickedComponentElement = targetElement.closest<HTMLElement>('[data-component-id]');
                 
-                // If clicked on an interactive child of the current component, let the event propagate.
-                // Also, don't select the parent if an interactive child was the primary target.
                 const interactiveChild = targetElement.closest('button, input, textarea, select, [role="button"], [role="tab"], [role="radio"]');
                 if (interactiveChild && clickedComponentElement && interactiveChild !== clickedComponentElement && clickedComponentElement.dataset.componentId === component.id) {
-                    // If it's an interactive child, don't stop propagation and don't re-select the parent.
-                    // This allows the interactive child to function.
                     if (component.id !== selectedComponentId) {
                         selectComponent(component.id);
                          if (!component.parentId) bringToFront(component.id);
@@ -401,7 +397,6 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
                 }
                 
                 if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
-                    // Clicked on a different component's child, let its own handler deal with it.
                     return;
                 }
                 
@@ -441,3 +436,4 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
 };
 
 export default CanvasItemRenderer;
+

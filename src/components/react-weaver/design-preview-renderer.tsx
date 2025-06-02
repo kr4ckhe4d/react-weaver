@@ -11,37 +11,50 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// This function is a simplified version of renderComponent from CanvasItemRenderer
-// It's focused purely on rendering the component's visual aspect and interactivity.
-const renderPreviewComponent = (component: CanvasComponent) => {
-  const { type, props } = component;
+const renderPreviewComponent = (component: CanvasComponent): JSX.Element | null => {
+  const { type, props, children } = component;
   const commonProps = { ...props }; 
+
+  // Common style for absolutely positioned children within a container
+  const childStyle: React.CSSProperties = component.parentId ? {
+    position: 'absolute',
+    left: component.x,
+    top: component.y,
+    width: component.width,
+    height: component.height,
+  } : {};
+
 
   switch (type) {
     case 'button':
-      return <Button {...commonProps}>{props.children || 'Button'}</Button>;
+      return <Button {...commonProps} style={childStyle}>{props.children || 'Button'}</Button>;
     case 'input':
-      return <Input {...commonProps} className={cn("w-full h-full", props.className)} />;
+      return <Input {...commonProps} className={cn("w-full h-full", props.className)} style={childStyle} readOnly={false} />;
     case 'text':
-      return <p {...commonProps} className={cn("p-1", props.className)}>{props.children || 'Text Block'}</p>;
+      return <p {...commonProps} className={cn("p-1", props.className)} style={childStyle}>{props.children || 'Text Block'}</p>;
     case 'card':
       return (
-        <ShadCard {...commonProps} className={cn("w-full h-full overflow-hidden flex flex-col", props.className)}>
+        <ShadCard {...commonProps} className={cn("w-full h-full overflow-hidden flex flex-col", props.className)} style={childStyle}>
           <ShadCardHeader>
             <ShadCardTitle>{props.title || 'Card Title'}</ShadCardTitle>
             {props.description && <ShadCardDescription>{props.description}</ShadCardDescription>}
           </ShadCardHeader>
-          <ShadCardContent className="flex-grow">
-            <p>{props.content || 'Card Content'}</p>
+          <ShadCardContent className="flex-grow relative"> {/* Added relative for child positioning */}
+            {(!children || children.length === 0) && (props.content || 'Card Content')}
+            {children && children.map(child => (
+                <div key={`preview-child-${child.id}`} style={{position: 'absolute', left: child.x, top: child.y, width: child.width, height: child.height}}>
+                    {renderPreviewComponent(child)}
+                </div>
+            ))}
           </ShadCardContent>
         </ShadCard>
       );
     case 'image':
-      return <img src={props.src} alt={props.alt} {...commonProps} className={cn("w-full h-full object-contain", props.className)} data-ai-hint={props['data-ai-hint']} />;
+      return <img src={props.src} alt={props.alt} {...commonProps} className={cn("w-full h-full object-contain", props.className)} style={childStyle} data-ai-hint={props['data-ai-hint']} />;
     case 'checkbox':
         return (
-            <div className="flex items-center space-x-2 p-1">
-                <Checkbox id={`${component.id}-preview-checkbox`} checked={props.checked} {...commonProps} />
+            <div className="flex items-center space-x-2 p-1" style={childStyle}>
+                <Checkbox id={`${component.id}-preview-checkbox`} checked={props.checked} {...commonProps} disabled={false} />
                 <label htmlFor={`${component.id}-preview-checkbox`} className="text-sm font-medium leading-none">
                     {props.label || "Checkbox"}
                 </label>
@@ -49,15 +62,15 @@ const renderPreviewComponent = (component: CanvasComponent) => {
         );
     case 'switch':
         return (
-             <div className="flex items-center space-x-2 p-1">
-                <Switch id={`${component.id}-preview-switch`} checked={props.checked} {...commonProps} />
+             <div className="flex items-center space-x-2 p-1" style={childStyle}>
+                <Switch id={`${component.id}-preview-switch`} checked={props.checked} {...commonProps} disabled={false} />
                 <label htmlFor={`${component.id}-preview-switch`}>{props.label || "Toggle"}</label>
             </div>
         );
     case 'placeholder':
-        return <div className={cn("w-full h-full bg-muted/50 border border-dashed border-foreground/30 flex items-center justify-center text-muted-foreground", props.className)}>{props.text || "Placeholder"}</div>;
+        return <div className={cn("w-full h-full bg-muted/50 border border-dashed border-foreground/30 flex items-center justify-center text-muted-foreground", props.className)} style={childStyle}>{props.text || "Placeholder"}</div>;
     default:
-      return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2">Unknown component: {type}</div>;
+      return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2" style={childStyle}>Unknown component: {type}</div>;
   }
 };
 
@@ -70,13 +83,15 @@ const DesignPreviewRenderer: React.FC = () => {
     position: 'relative',
     backgroundColor: 'hsl(var(--background))', 
     boxShadow: '0 0 10px rgba(0,0,0,0.1)', 
-    margin: 'auto', 
+    margin: 'auto', // Centers the canvas if ScrollArea is larger
   };
 
   return (
-    <ScrollArea className="w-full h-full bg-muted/20">
+    <ScrollArea className="w-full h-full bg-muted/20"> 
         <div style={previewContainerStyle}>
-            {components.map((comp) => (
+            {components.filter(c => !c.parentId) // Only render top-level components directly
+            .sort((a,b) => a.zIndex - b.zIndex)
+            .map((comp) => (
             <div
                 key={`preview-${comp.id}`}
                 style={{

@@ -1,3 +1,4 @@
+
 import type { AvailableComponent } from '@/types';
 import {
   IconButton,
@@ -55,19 +56,20 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     defaultSize: { width: 200, height: 30 },
     propTypes: {
       children: { type: 'string', defaultValue: 'Some sample text', label: 'Content' },
-      className: { type: 'string', defaultValue: 'text-base', label: 'Tailwind Classes (e.g. text-lg font-bold)'} // Example of more advanced prop
+      className: { type: 'string', defaultValue: 'text-base', label: 'Tailwind Classes (e.g. text-lg font-bold)'}
     },
   },
   {
     id: 'card',
     name: 'Card',
     icon: IconCard,
-    defaultProps: { title: 'Card Title', description: 'Card description here.', content: 'Main card content.'},
+    isContainer: true, // This card can now accept children
+    defaultProps: { title: 'Card Title', description: 'Card description here.', content: 'Drag components here.'}, // Updated content
     defaultSize: { width: 300, height: 200 },
     propTypes: {
         title: { type: 'string', defaultValue: 'Card Title', label: 'Title' },
         description: { type: 'string', defaultValue: 'Card description here.', label: 'Description' },
-        content: { type: 'string', defaultValue: 'Main card content.', label: 'Content' },
+        content: { type: 'string', defaultValue: 'Drag components here.', label: 'Default Content (if no children)' },
     },
   },
   {

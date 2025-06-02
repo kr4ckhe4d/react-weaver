@@ -10,19 +10,42 @@ import { Card as ShadCard, CardHeader as ShadCardHeader, CardTitle as ShadCardTi
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { ResizableBox, type ResizableBoxProps } from 'react-resizable';
-import 'react-resizable/css/styles.css'; // Import react-resizable styles
-import { IconMove, IconMaximize, IconTrash } from './icons';
+import 'react-resizable/css/styles.css';
+import { IconMove, IconTrash } from './icons';
 import { cn } from '@/lib/utils';
 
 interface CanvasItemRendererProps {
   component: CanvasComponent;
 }
 
-// A simple mapping from type to actual component rendering logic
-const renderComponent = (component: CanvasComponent) => {
-  const { type, props } = component;
-  const commonProps = { id: component.id, ...props }; // Pass ID for DOM if needed
+const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContext: ReturnType<typeof useDesign> }> = ({ component, designContext }) => {
+  const { type, props, children } = component;
+  const commonProps = { id: component.id, ...props };
+  const { addComponent, selectComponent: contextSelectComponent } = designContext;
 
+  const handleDropOnContainer = (event: React.DragEvent<HTMLDivElement>, containerId: string) => {
+    event.preventDefault();
+    event.stopPropagation(); // Prevent drop from bubbling to main canvas if it's a nested drop
+    const componentType = event.dataTransfer.getData('application/react-weaver-component');
+    const target = event.currentTarget as HTMLElement; // The drop target (e.g., CardContent)
+    const rect = target.getBoundingClientRect();
+    
+    // Calculate position relative to the drop target element
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    if (componentType) {
+      addComponent(componentType, { x, y }, containerId);
+    }
+  };
+
+  const handleDragOverContainer = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    event.stopPropagation();
+  };
+  
+  // A simple mapping from type to actual component rendering logic
   switch (type) {
     case 'button':
       return <Button {...commonProps}>{props.children || 'Button'}</Button>;
@@ -37,8 +60,15 @@ const renderComponent = (component: CanvasComponent) => {
             <ShadCardTitle>{props.title || 'Card Title'}</ShadCardTitle>
             {props.description && <ShadCardDescription>{props.description}</ShadCardDescription>}
           </ShadCardHeader>
-          <ShadCardContent className="flex-grow">
-            <p>{props.content || 'Card Content'}</p>
+          <ShadCardContent 
+            className="flex-grow relative" // Added relative for child positioning
+            onDrop={(e) => handleDropOnContainer(e, component.id)}
+            onDragOver={handleDragOverContainer}
+          >
+            {(!children || children.length === 0) && (props.content || 'Card Content')}
+            {children && children.map(child => (
+              <CanvasItemRenderer key={child.id} component={child} />
+            ))}
           </ShadCardContent>
         </ShadCard>
       );
@@ -69,7 +99,8 @@ const renderComponent = (component: CanvasComponent) => {
 
 
 const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) => {
-  const { selectedComponentId, selectComponent, updateComponentPosition, updateComponentSize, deleteComponent, bringToFront } = useDesign();
+  const designContext = useDesign();
+  const { selectedComponentId, selectComponent, updateComponentPosition, updateComponentSize, deleteComponent, bringToFront } = designContext;
   const isSelected = component.id === selectedComponentId;
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
@@ -79,16 +110,16 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
   const minWidth = componentConfig?.defaultSize.width ? Math.max(GRID_SIZE, componentConfig.defaultSize.width / 2) : GRID_SIZE;
   const minHeight = componentConfig?.defaultSize.height ? Math.max(GRID_SIZE, componentConfig.defaultSize.height / 2) : GRID_SIZE;
 
-
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Prevent drag from starting if clicking on resize handle or other interactive elements within the component
-    if ((e.target as HTMLElement).closest('.react-resizable-handle') || (e.target as HTMLElement).closest('button, input, textarea, select')) {
+    if ((e.target as HTMLElement).closest('.react-resizable-handle') || (e.target as HTMLElement).closest('button, input, textarea, select') || (e.target as HTMLElement).closest('[data-component-id] [data-component-id]') ) { // Prevent drag if clicking on child or controls
       return;
     }
     e.preventDefault();
     e.stopPropagation();
     selectComponent(component.id);
-    bringToFront(component.id);
+    if (!component.parentId) { // Only bring top-level components to front
+        bringToFront(component.id);
+    }
     setIsDragging(true);
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     itemStartPos.current = { x: component.x, y: component.y };
@@ -102,7 +133,7 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
       updateComponentPosition(component.id, {
         x: itemStartPos.current.x + dx,
         y: itemStartPos.current.y + dy,
-      });
+      }, component.parentId); // Pass parentId for context
     };
 
     const handleMouseUp = () => {
@@ -120,23 +151,24 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, isSelected, component.id, updateComponentPosition]);
+  }, [isDragging, isSelected, component.id, component.parentId, updateComponentPosition]);
 
 
   const onResize: ResizableBoxProps['onResize'] = (event, { size }) => {
-    updateComponentSize(component.id, { width: size.width, height: size.height });
+    updateComponentSize(component.id, { width: size.width, height: size.height }, component.parentId);
   };
   
   const onResizeStop: ResizableBoxProps['onResizeStop'] = (event, { size }) => {
-    updateComponentSize(component.id, { width: size.width, height: size.height });
-     // Ensure selection and bring to front on resize interaction
+    updateComponentSize(component.id, { width: size.width, height: size.height }, component.parentId);
     selectComponent(component.id);
-    bringToFront(component.id);
+     if (!component.parentId) {
+        bringToFront(component.id);
+    }
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteComponent(component.id);
+    deleteComponent(component.id, component.parentId);
   };
 
   const wrapperStyle: React.CSSProperties = {
@@ -145,7 +177,7 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
     top: component.y,
     width: component.width,
     height: component.height,
-    zIndex: component.zIndex,
+    zIndex: component.parentId ? 'auto' : component.zIndex, // Children z-index is managed by parent
     cursor: isDragging ? 'grabbing' : 'grab',
   };
 
@@ -157,13 +189,13 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
         maxConstraints={[Infinity, Infinity]}
         onResize={onResize}
         onResizeStop={onResizeStop}
-        draggableOpts={{ grid: [GRID_SIZE, GRID_SIZE], disabled: true }} // Disable ResizableBox's own drag
+        draggableOpts={{ grid: [GRID_SIZE, GRID_SIZE], disabled: true }}
         className={cn(
             "absolute group/canvas-item",
             isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-canvas-background shadow-2xl",
             "transition-shadow duration-150 ease-in-out"
         )}
-        style={{...wrapperStyle, cursor: 'default'}} // Override cursor for ResizableBox itself
+        style={{...wrapperStyle, cursor: 'default'}}
         handle={(handleAxis, ref) => (
             <div
             ref={ref}
@@ -188,24 +220,21 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
         )}
         >
         <div 
-            className="relative w-full h-full outline-none"
+            className="relative w-full h-full outline-none bg-background" // Added bg-background for children visibility
             onMouseDown={handleMouseDown}
-            onClick={(e) => { e.stopPropagation(); selectComponent(component.id); bringToFront(component.id);}} // Ensure selection on click
+            onClick={(e) => { e.stopPropagation(); selectComponent(component.id); if (!component.parentId) bringToFront(component.id);}}
             data-component-id={component.id}
             data-selected={isSelected}
         >
-            {/* Render the actual component */}
-            <div className="w-full h-full pointer-events-none select-none"> {/* Prevents interaction with inner elements during drag */}
-              {renderComponent(component)}
+            <div className={cn("w-full h-full", isDragging ? "pointer-events-none select-none" : "")}>
+              <CanvasItemRendererInner component={component} designContext={designContext} />
             </div>
             
-            {/* Controls for selected item */}
             {isSelected && (
             <>
                 <div 
                     className="absolute -top-3 -left-3 p-0.5 bg-primary text-primary-foreground rounded-full cursor-grab active:cursor-grabbing shadow-lg opacity-0 group-hover/canvas-item:opacity-100 transition-opacity"
                     title="Move"
-                    onMouseDown={(e) => { /* This is part of the larger drag area now */ }}
                 >
                     <IconMove size={14} />
                 </div>

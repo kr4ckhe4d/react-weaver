@@ -25,12 +25,11 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
 
   const handleDropOnContainer = (event: React.DragEvent<HTMLDivElement>, containerId: string) => {
     event.preventDefault();
-    event.stopPropagation(); // Prevent drop from bubbling to main canvas if it's a nested drop
+    event.stopPropagation(); 
     const componentType = event.dataTransfer.getData('application/react-weaver-component');
-    const target = event.currentTarget as HTMLElement; // The drop target (e.g., CardContent)
+    const target = event.currentTarget as HTMLElement; 
     const rect = target.getBoundingClientRect();
     
-    // Calculate position relative to the drop target element
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     
@@ -45,7 +44,6 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
     event.stopPropagation();
   };
   
-  // A simple mapping from type to actual component rendering logic
   switch (type) {
     case 'button':
       return <Button {...commonProps}>{props.children || 'Button'}</Button>;
@@ -61,7 +59,7 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
             {props.description && <ShadCardDescription>{props.description}</ShadCardDescription>}
           </ShadCardHeader>
           <ShadCardContent 
-            className="flex-grow relative" // Added relative for child positioning
+            className="flex-grow relative" 
             onDrop={(e) => handleDropOnContainer(e, component.id)}
             onDragOver={handleDragOverContainer}
           >
@@ -111,15 +109,31 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
   const minHeight = componentConfig?.defaultSize.height ? Math.max(GRID_SIZE, componentConfig.defaultSize.height / 2) : GRID_SIZE;
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('.react-resizable-handle') || (e.target as HTMLElement).closest('button, input, textarea, select') || (e.target as HTMLElement).closest('[data-component-id] [data-component-id]') ) { // Prevent drag if clicking on child or controls
+    const targetElement = e.target as HTMLElement;
+
+    // Prevent drag if clicking on resize handles or interactive form elements within this component
+    if (targetElement.closest('.react-resizable-handle') ||
+        targetElement.closest('button, input, textarea, select')) {
       return;
     }
-    e.preventDefault();
-    e.stopPropagation();
+    
+    // If the event target is part of a *different* deeper CanvasItemRenderer (a child),
+    // let that child handle the event. This component (parent) should not start dragging.
+    // Check that the closest [data-component-id] is actually this component's ID.
+    const clickedComponentElement = targetElement.closest<HTMLElement>('[data-component-id]');
+    if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
+      // Click was on a child component, let it handle its own drag.
+      return; 
+    }
+
+    e.preventDefault(); // Crucial for custom drag implementations
+    e.stopPropagation(); // Prevent event from bubbling to parent canvas or other elements
+
     selectComponent(component.id);
-    if (!component.parentId) { // Only bring top-level components to front
+    if (!component.parentId) { // Only top-level components affect global z-index stacking directly
         bringToFront(component.id);
     }
+    
     setIsDragging(true);
     dragStartPos.current = { x: e.clientX, y: e.clientY };
     itemStartPos.current = { x: component.x, y: component.y };
@@ -133,7 +147,7 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
       updateComponentPosition(component.id, {
         x: itemStartPos.current.x + dx,
         y: itemStartPos.current.y + dy,
-      }, component.parentId); // Pass parentId for context
+      }, component.parentId);
     };
 
     const handleMouseUp = () => {
@@ -160,7 +174,7 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
   
   const onResizeStop: ResizableBoxProps['onResizeStop'] = (event, { size }) => {
     updateComponentSize(component.id, { width: size.width, height: size.height }, component.parentId);
-    selectComponent(component.id);
+    selectComponent(component.id); // Re-select after resize might be needed if focus is lost
      if (!component.parentId) {
         bringToFront(component.id);
     }
@@ -177,8 +191,8 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
     top: component.y,
     width: component.width,
     height: component.height,
-    zIndex: component.parentId ? 'auto' : component.zIndex, // Children z-index is managed by parent
-    cursor: isDragging ? 'grabbing' : 'grab',
+    zIndex: component.parentId ? 'auto' : component.zIndex, 
+    // cursor: isDragging ? 'grabbing' : 'grab', // Cursor is set on the inner div
   };
 
   return (
@@ -189,20 +203,20 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
         maxConstraints={[Infinity, Infinity]}
         onResize={onResize}
         onResizeStop={onResizeStop}
-        draggableOpts={{ grid: [GRID_SIZE, GRID_SIZE], disabled: true }}
+        draggableOpts={{ grid: [GRID_SIZE, GRID_SIZE], disabled: true }} // We handle drag, ResizableBox should not.
         className={cn(
             "absolute group/canvas-item",
             isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-canvas-background shadow-2xl",
             "transition-shadow duration-150 ease-in-out"
         )}
-        style={{...wrapperStyle, cursor: 'default'}}
+        style={{...wrapperStyle, cursor: 'default'}} // Default cursor, inner div handles grab
         handle={(handleAxis, ref) => (
             <div
             ref={ref}
             className={cn(
                 `react-resizable-handle react-resizable-handle-${handleAxis}`,
                 "bg-primary/80 opacity-0 group-hover/canvas-item:opacity-100 group-data-[selected=true]/canvas-item:opacity-100",
-                "transition-opacity duration-150"
+                "transition-opacity duration-150 z-10" // Ensure handles are on top
             )}
             style={{
                 width: '10px', height: '10px',
@@ -220,9 +234,37 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
         )}
         >
         <div 
-            className="relative w-full h-full outline-none bg-background" // Added bg-background for children visibility
-            onMouseDown={handleMouseDown}
-            onClick={(e) => { e.stopPropagation(); selectComponent(component.id); if (!component.parentId) bringToFront(component.id);}}
+            className="relative w-full h-full outline-none bg-background"
+            style={{cursor: isDragging ? 'grabbing' : 'grab'}} // Apply grab cursor here
+            onMouseDown={handleMouseDown} // This now correctly initiates drag for the component itself
+            onClick={(e) => {
+                const targetElement = e.target as HTMLElement;
+                const clickedComponentElement = targetElement.closest<HTMLElement>('[data-component-id]');
+        
+                // If the click originated on a child's interactive element (button, input) or a deeper component,
+                // let those elements handle it. The child's own onClick or native behavior should take precedence.
+                if (targetElement.closest('button, input, textarea, select, a, .react-resizable-handle')) {
+                    // If on a handle, it's for resizing, not selection.
+                    // If on button/input etc., let native interaction occur.
+                    // Child component clicks are handled by their own CanvasItemRenderer instance.
+                    if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
+                       // Clicked on a child's control or the child itself.
+                       // The child's onClick (if it's a CanvasItemRenderer) will handle selection and stop propagation.
+                       return;
+                    }
+                } else if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
+                    // Clicked on the general area of a child component, not a specific control.
+                    // Let the child's onClick handle its selection.
+                    return;
+                }
+                
+                // If the click is truly on this component's background area (not a child, not a control)
+                e.stopPropagation(); 
+                selectComponent(component.id); 
+                if (!component.parentId) {
+                    bringToFront(component.id);
+                }
+            }}
             data-component-id={component.id}
             data-selected={isSelected}
         >
@@ -233,13 +275,14 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
             {isSelected && (
             <>
                 <div 
-                    className="absolute -top-3 -left-3 p-0.5 bg-primary text-primary-foreground rounded-full cursor-grab active:cursor-grabbing shadow-lg opacity-0 group-hover/canvas-item:opacity-100 transition-opacity"
+                    className="absolute -top-3 -left-3 p-0.5 bg-primary text-primary-foreground rounded-full cursor-grab active:cursor-grabbing shadow-lg opacity-0 group-hover/canvas-item:opacity-100 group-data-[selected=true]/canvas-item:opacity-100 transition-opacity z-20"
                     title="Move"
+                    // The main onMouseDown on the parent div now handles movement initiation
                 >
                     <IconMove size={14} />
                 </div>
                 <button
-                    className="absolute -top-3 -right-3 p-0.5 bg-destructive text-destructive-foreground rounded-full cursor-pointer shadow-lg opacity-0 group-hover/canvas-item:opacity-100 transition-opacity"
+                    className="absolute -top-3 -right-3 p-0.5 bg-destructive text-destructive-foreground rounded-full cursor-pointer shadow-lg opacity-0 group-hover/canvas-item:opacity-100 group-data-[selected=true]/canvas-item:opacity-100 transition-opacity z-20"
                     onClick={handleDelete}
                     title="Delete"
                 >
@@ -253,3 +296,4 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
 };
 
 export default CanvasItemRenderer;
+

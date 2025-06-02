@@ -84,17 +84,16 @@ const RenderPreviewComponentRecursive: React.FC<{
       if (appLogicModules[moduleName] && typeof appLogicModules[moduleName][funcName] === 'function') {
         try {
           console.log(`Preview: Calling ${moduleName}/${funcName} with setters:`, allSetters);
-          // We will assume for now that if a function takes more than one arg,
-          // the editor will need to provide a way to specify them.
-          // For now, all example actions take 'setters' as the first, and potentially one other arg.
-          // This part might need to become more sophisticated if actions need more complex signatures from the editor.
           const actionFn = appLogicModules[moduleName][funcName];
+          // Example of how one might pass specific arguments if needed.
+          // For now, `setSpecificProgressValue` is an example that takes two.
+          // Other actions are assumed to take `setters` or `setters, arg2, ...`.
           if (actionFn === exampleActionsModule.setSpecificProgressValue) {
-             // A bit of a special case for demonstration.
-             // Ideally, the editor would pass arguments. For now, hardcoding for this example.
-            await actionFn(allSetters, 70); // Example: pass 70 as targetValue
+            // For demonstration, if it's this specific function, we pass a hardcoded target value.
+            // In a real scenario, the editor would need a way to define these extra args.
+            await actionFn(allSetters, 70); // Hardcoded targetValue for this example
           } else {
-            await actionFn(allSetters);
+            await actionFn(allSetters); // Pass all available setters
           }
         } catch (error) {
           console.error(`Error executing action ${moduleName}/${funcName}:`, error);
@@ -123,7 +122,7 @@ const RenderPreviewComponentRecursive: React.FC<{
       return <Button {...previewButtonProps} style={childStyle} onClick={handleAction}>{props.children || 'Button'}</Button>;
     case 'input':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valueSource: _valueSourceIgnoredInput, ...inputPreviewProps } = commonProps;
+      const { valueSource: _valueSourceIgnoredInput, value: _staticInputValue, ...inputPreviewProps } = commonProps;
       const inputSetter = getSetterForValueSource(props.valueSource);
       return <Input {...inputPreviewProps}
                 value={props.valueSource ? liveValue : localInputValue}
@@ -150,7 +149,7 @@ const RenderPreviewComponentRecursive: React.FC<{
       return <img src={props.src} alt={props.alt} {...commonProps} className={cn("w-full h-full object-contain", props.className)} style={childStyle} data-ai-hint={props['data-ai-hint']} />;
     case 'checkbox':
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { valueSource: _valueSourceIgnoredCheckbox, ...checkboxPreviewProps } = commonProps;
+        const { valueSource: _valueSourceIgnoredCheckbox, checked: _staticCheckboxChecked, ...checkboxPreviewProps } = commonProps;
         const checkboxSetter = getSetterForValueSource(props.valueSource);
         return (
             <div className="flex items-center space-x-2 p-1" style={childStyle}>
@@ -165,7 +164,7 @@ const RenderPreviewComponentRecursive: React.FC<{
         );
     case 'switch':
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { valueSource: _valueSourceIgnoredSwitch, ...switchPreviewProps } = commonProps;
+        const { valueSource: _valueSourceIgnoredSwitch, checked: _staticSwitchChecked, ...switchPreviewProps } = commonProps;
         const switchSetter = getSetterForValueSource(props.valueSource);
         return (
              <div className="flex items-center space-x-2 p-1" style={childStyle}>
@@ -214,7 +213,7 @@ const RenderPreviewComponentRecursive: React.FC<{
       return <Label className={cn("p-1", props.className)} style={childStyle} {...labelPreviewProps}>{labelText}</Label>;
     case 'progress':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valueSource: _valueSourceIgnoredProgress, ...progressPreviewProps } = commonProps;
+      const { valueSource: _valueSourceIgnoredProgress, value: _staticValueIgnored, ...progressPreviewProps } = commonProps;
       const currentProgressValue = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
                                    ? valueSourceStates[props.valueSource]
                                    : props.value;
@@ -301,7 +300,7 @@ const RenderPreviewComponentRecursive: React.FC<{
         );
     case 'textarea':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valueSource: _valueSourceIgnoredTextarea, ...textareaPreviewProps } = commonProps;
+      const { valueSource: _valueSourceIgnoredTextarea, value: _staticTextareaValue, ...textareaPreviewProps } = commonProps;
       const textareaSetter = getSetterForValueSource(props.valueSource);
       return <Textarea placeholder={props.placeholder}
                  value={props.valueSource ? liveValue : localTextareaValue}
@@ -330,19 +329,20 @@ const DesignPreviewRenderer: React.FC = () => {
     }
     collectValueSourcesRecursive(designComponents);
     return Array.from(sources);
-  }, [designComponents]); // Only depends on designComponents
+  }, [designComponents]); 
 
   useEffect(() => {
     const newInitialStates: Record<string, any> = {};
     let updateNeeded = false;
 
-    const currentDesignComponents = designComponents;
+    const currentDesignComponents = designComponents; // Capture current designComponents
 
     uniqueValueSources.forEach(sourceName => {
       if (!valueSourceStates.hasOwnProperty(sourceName)) {
         updateNeeded = true;
         let initialValue: any = null;
 
+        // Find the component that defines this valueSource to get its initial value
         let compWithValueSource: CanvasComponent | undefined;
         const findComp = (comps: CanvasComponent[]): CanvasComponent | undefined => {
             for (const comp of comps) {
@@ -354,12 +354,13 @@ const DesignPreviewRenderer: React.FC = () => {
             }
             return undefined;
         };
-        compWithValueSource = findComp(currentDesignComponents);
+        compWithValueSource = findComp(currentDesignComponents); // Use captured components
 
         if (compWithValueSource) {
           const compConfig = getComponentConfig(compWithValueSource.type);
           const props = compWithValueSource.props;
 
+          // Determine initial value based on component type and its relevant prop
           if (compWithValueSource.type === 'progress') {
             initialValue = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? 0);
           } else if (compWithValueSource.type === 'input' || compWithValueSource.type === 'textarea') {
@@ -368,13 +369,14 @@ const DesignPreviewRenderer: React.FC = () => {
              initialValue = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);
           } else if (compWithValueSource.type === 'label') {
              initialValue = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');
-          } else {
+          }
+           else { // Fallback for other potential value-holding components
             if (props.value !== undefined) initialValue = props.value;
             else if (props.checked !== undefined) initialValue = props.checked;
             else if (compConfig?.propTypes.value?.defaultValue !== undefined) initialValue = compConfig.propTypes.value.defaultValue;
             else if (compConfig?.propTypes.checked?.defaultValue !== undefined) initialValue = compConfig.propTypes.checked.defaultValue;
             else if (compConfig?.propTypes.children?.defaultValue !== undefined) initialValue = String(compConfig.propTypes.children.defaultValue);
-            else initialValue = null;
+            else initialValue = null; // Default to null if no specific initial value found
           }
         }
         newInitialStates[sourceName] = initialValue;
@@ -384,7 +386,7 @@ const DesignPreviewRenderer: React.FC = () => {
     if (updateNeeded) {
       setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources]); // Changed dependency array
+  }, [uniqueValueSources]); // Only depend on uniqueValueSources
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
     const setters: AvailableSetters = {};
@@ -411,14 +413,14 @@ const DesignPreviewRenderer: React.FC = () => {
     position: 'relative',
     backgroundColor: 'hsl(var(--background))',
     boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-    margin: 'auto',
+    margin: 'auto', // Center the preview area if smaller than scroll area
   };
 
   return (
-    <ScrollArea className="w-full h-full bg-muted/20">
+    <ScrollArea className="w-full h-full bg-muted/20"> {/* Ensure ScrollArea takes full space */}
         <div style={previewContainerStyle}>
-            {designComponents.filter(c => !c.parentId)
-            .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+            {designComponents.filter(c => !c.parentId) // Only render top-level components directly
+            .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)) // Sort by zIndex
             .map((comp) => (
             <div
                 key={`preview-top-${comp.id}`}
@@ -440,5 +442,3 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
-
-    

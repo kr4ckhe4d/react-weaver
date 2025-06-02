@@ -27,23 +27,27 @@ import { getComponentConfig } from './available-components';
 import type { AvailableSetters } from '@/app-logic/types';
 
 // Dynamically import all modules from app-logic
-// This is a simplified example. For a real app, you might need a more robust solution
-// or explicitly list modules if dynamic import.meta.glob isn't supported/behaving as expected in all environments.
 let appLogicModules: Record<string, Record<string, (...args: any[]) => any>> = {};
 
-// Attempt to load modules. This is a placeholder for a more robust dynamic loading strategy.
-// For a Next.js app, direct dynamic imports or a build-time script to generate this map might be better.
+// Attempt to load modules.
 try {
-  // This is a conceptual example. Actual dynamic loading in Next.js server/client components can be tricky.
-  // For now, let's hardcode known modules for simplicity in the preview context.
-  const exampleActions = await import('@/app-logic/exampleActions');
-  appLogicModules = {
-    exampleActions,
-    // Add other modules here if needed, e.g.,
-    // anotherLogicFile: await import('@/app-logic/anotherLogicFile'),
-  };
+  // Forcing dynamic import to be treated as such by webpack/bundler
+  const importExampleActions = () => import('@/app-logic/exampleActions');
+  
+  // To ensure it's treated as async and allow await
+  (async () => {
+    try {
+      const exampleActions = await importExampleActions();
+      appLogicModules = {
+        exampleActions: exampleActions.default || exampleActions, // Handle default exports if any
+      };
+    } catch (e) {
+        console.error("Error during async import of app-logic modules:", e);
+    }
+  })();
+
 } catch (e) {
-  console.error("Error dynamically loading app-logic modules for preview:", e);
+  console.error("Error setting up dynamic import for app-logic modules:", e);
 }
 
 
@@ -74,6 +78,7 @@ const RenderPreviewComponentRecursive: React.FC<{
         case 'checkbox': liveValue = !!props.checked; break;
         case 'switch': liveValue = !!props.checked; break;
         case 'progress': liveValue = props.value || 0; break;
+        // For other types, liveValue will remain undefined if not from valueSourceStates
     }
   }
 
@@ -98,14 +103,14 @@ const RenderPreviewComponentRecursive: React.FC<{
       if (appLogicModules[moduleName] && typeof appLogicModules[moduleName][funcName] === 'function') {
         try {
           console.log(`Preview: Calling ${moduleName}/${funcName} with setters:`, allSetters);
-          await appLogicModules[moduleName][funcName](allSetters); // Pass allSetters
+          await appLogicModules[moduleName][funcName](allSetters); 
         } catch (error) {
           console.error(`Error executing action ${moduleName}/${funcName}:`, error);
           alert(`Error in action ${moduleName}/${funcName}: ${error instanceof Error ? error.message : String(error)}`);
         }
       } else {
         console.warn(`Preview: Action module or function '${actionString}' not found. Loaded modules:`, Object.keys(appLogicModules));
-        alert(`Action '${actionString}' not found.`);
+        alert(`Action '${actionString}' not found. Make sure it's exported from src/app-logic/${moduleName}.ts and that the file is loaded.`);
       }
     } else {
        console.log(`Preview: Local action '${actionString}' would be triggered (not supported in preview for direct execution).`);
@@ -206,10 +211,10 @@ const RenderPreviewComponentRecursive: React.FC<{
       return <Label className={cn("p-1", props.className)} style={childStyle} {...commonProps}>{props.children || 'Label'}</Label>;
     case 'progress':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valueSource: _valueSourceIgnored, ...progressPreviewProps } = commonProps;
+      const { valueSource: _valueSourceIgnoredProgress, ...progressPreviewProps } = commonProps;
       const currentProgressValue = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
                                    ? valueSourceStates[props.valueSource]
-                                   : props.value; // Fallback to static prop if valueSource not used/found
+                                   : props.value; 
       return <Progress value={Number(currentProgressValue) || 0} className={cn("w-full", props.className)} style={childStyle} {...progressPreviewProps} />;
     case 'radioGroup':
       return (
@@ -360,6 +365,7 @@ const DesignPreviewRenderer: React.FC = () => {
             else if (props.checked !== undefined) initialValue = props.checked;
             else if (compConfig?.propTypes.value?.defaultValue !== undefined) initialValue = compConfig.propTypes.value.defaultValue;
             else if (compConfig?.propTypes.checked?.defaultValue !== undefined) initialValue = compConfig.propTypes.checked.defaultValue;
+            else initialValue = null; // Default to null if no other value found
           }
         }
         newInitialStates[sourceName] = initialValue;
@@ -369,7 +375,7 @@ const DesignPreviewRenderer: React.FC = () => {
     if (updateNeeded) {
       setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources, designComponents, valueSourceStates]);
+  }, [uniqueValueSources, designComponents]); // Corrected dependency array
 
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
@@ -395,16 +401,16 @@ const DesignPreviewRenderer: React.FC = () => {
     width: `${canvasSize.width}px`,
     height: `${canvasSize.height}px`,
     position: 'relative',
-    backgroundColor: 'hsl(var(--background))', // Or var(--canvas-background) if defined for preview
-    boxShadow: '0 0 10px rgba(0,0,0,0.1)', // A subtle shadow for better visual separation
-    margin: 'auto', // Center the preview area if the scroll area is larger
+    backgroundColor: 'hsl(var(--background))', 
+    boxShadow: '0 0 10px rgba(0,0,0,0.1)', 
+    margin: 'auto', 
   };
 
   return (
-    <ScrollArea className="w-full h-full bg-muted/20"> {/* Ensure ScrollArea takes full space */}
+    <ScrollArea className="w-full h-full bg-muted/20"> 
         <div style={previewContainerStyle}>
-            {designComponents.filter(c => !c.parentId) // Only render top-level components directly
-            .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)) // Ensure zIndex is defined
+            {designComponents.filter(c => !c.parentId) 
+            .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)) 
             .map((comp) => (
             <div
                 key={`preview-top-${comp.id}`}
@@ -414,7 +420,7 @@ const DesignPreviewRenderer: React.FC = () => {
                 top: comp.y,
                 width: comp.width,
                 height: comp.height,
-                zIndex: comp.zIndex, // Use the zIndex from the component data
+                zIndex: comp.zIndex, 
                 }}
             >
                 <RenderPreviewComponentRecursive component={comp} valueSourceStates={valueSourceStates} allSetters={allSettersForActions} />
@@ -426,3 +432,4 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
+

@@ -14,6 +14,23 @@ import 'react-resizable/css/styles.css';
 import { IconMove, IconTrash } from './icons';
 import { cn } from '@/lib/utils';
 
+// Import new ShadCN components
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableCaption, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+
+
 interface CanvasItemRendererProps {
   component: CanvasComponent;
 }
@@ -59,7 +76,7 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
             {props.description && <ShadCardDescription>{props.description}</ShadCardDescription>}
           </ShadCardHeader>
           <ShadCardContent 
-            className="flex-grow relative" 
+            className="flex-grow relative p-2" // Added padding for children
             onDrop={(e) => handleDropOnContainer(e, component.id)}
             onDragOver={handleDragOverContainer}
           >
@@ -90,6 +107,122 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
         );
     case 'placeholder':
         return <div className={cn("w-full h-full bg-muted/50 border border-dashed border-foreground/30 flex items-center justify-center text-muted-foreground", props.className)}>{props.text || "Placeholder"}</div>;
+    case 'accordion':
+      return (
+        <Accordion type={props.type} collapsible={props.collapsible} className={cn("w-full", props.className)} {...commonProps}>
+          {(props.items && Array.isArray(props.items)) ? props.items.map((item: any, index: number) => (
+            <AccordionItem value={item.value || `item-${index}`} key={item.value || `item-${index}`}>
+              <AccordionTrigger>{item.title || 'Accordion Title'}</AccordionTrigger>
+              <AccordionContent>{item.content || 'Accordion content.'}</AccordionContent>
+            </AccordionItem>
+          )) : <AccordionItem value="default-item"><AccordionTrigger>Default Title</AccordionTrigger><AccordionContent>Default Content</AccordionContent></AccordionItem>}
+        </Accordion>
+      );
+    case 'alert':
+      return (
+        <Alert variant={props.variant} className={cn("w-full", props.className)} {...commonProps}>
+          {props.title && <AlertTitle>{props.title}</AlertTitle>}
+          {props.description && <AlertDescription>{props.description}</AlertDescription>}
+        </Alert>
+      );
+    case 'avatar':
+      return (
+        <Avatar className={cn(props.className)} {...commonProps}>
+          <AvatarImage src={props.src} alt={props.alt || "Avatar"} />
+          <AvatarFallback>{props.fallback || 'AV'}</AvatarFallback>
+        </Avatar>
+      );
+    case 'badge':
+      return <Badge variant={props.variant} className={cn(props.className)} {...commonProps}>{props.children || 'Badge'}</Badge>;
+    case 'label':
+      return <Label className={cn("p-1", props.className)} {...commonProps}>{props.children || 'Label'}</Label>;
+    case 'progress':
+      return <Progress value={props.value} className={cn("w-full", props.className)} {...commonProps} />;
+    case 'radioGroup':
+      return (
+        <RadioGroup defaultValue={props.defaultValue} className={cn("p-2 space-y-2", props.className)} {...commonProps}>
+          {(props.items && Array.isArray(props.items)) ? props.items.map((item: any, index: number) => (
+            <div className="flex items-center space-x-2" key={item.value || `radio-${index}`}>
+              <RadioGroupItem value={item.value || `radio-${index}`} id={`${component.id}-${item.value || `radio-${index}`}`} />
+              <Label htmlFor={`${component.id}-${item.value || `radio-${index}`}`}>{item.label || 'Option'}</Label>
+            </div>
+          )) : <div className="flex items-center space-x-2"><RadioGroupItem value="default" id={`${component.id}-default`} /><Label htmlFor={`${component.id}-default`}>Default Option</Label></div>}
+        </RadioGroup>
+      );
+    case 'scrollArea':
+      return (
+        <ScrollArea className={cn("w-full h-full border rounded-md", props.className)} {...commonProps}
+            onDrop={(e) => handleDropOnContainer(e, component.id)}
+            onDragOver={handleDragOverContainer}
+        >
+            <div className="p-2 relative min-h-full"> {/* Added relative and min-h-full */}
+                {(!children || children.length === 0) && (props.contentPlaceholder || 'Scrollable Content Area')}
+                {children && children.map(child => (
+                    <CanvasItemRenderer key={child.id} component={child} />
+                ))}
+            </div>
+        </ScrollArea>
+      );
+    case 'select':
+      return (
+        <Select value={props.value} onValueChange={() => {}} {...commonProps}>
+          <SelectTrigger className={cn("w-full", props.className)}>
+            <SelectValue placeholder={props.placeholder || 'Select...'} />
+          </SelectTrigger>
+          <SelectContent>
+            {(props.items && Array.isArray(props.items)) ? props.items.map((item: any, index: number) => (
+              <SelectItem value={item.value || `select-${index}`} key={item.value || `select-${index}`}>
+                {item.label || 'Option'}
+              </SelectItem>
+            )) : <SelectItem value="default">Default Option</SelectItem>}
+          </SelectContent>
+        </Select>
+      );
+    case 'separator':
+      return <Separator orientation={props.orientation} className={cn(props.className)} {...commonProps} />;
+    case 'skeleton':
+      return <Skeleton className={cn("w-full h-full", props.className)} {...commonProps} />; // Skeleton fills the resizable box
+    case 'table':
+      return (
+        <Table className={cn("w-full", props.className)} {...commonProps}>
+          {props.caption && <TableCaption>{props.caption}</TableCaption>}
+          <TableHeader>
+            <TableRow>
+              {(props.headers && Array.isArray(props.headers)) ? props.headers.map((header: string, index: number) => (
+                <TableHead key={`header-${index}`}>{header}</TableHead>
+              )) : <TableHead>Header</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(props.rows && Array.isArray(props.rows)) ? props.rows.map((row: string[], rowIndex: number) => (
+              <TableRow key={`row-${rowIndex}`}>
+                {Array.isArray(row) ? row.map((cell: string, cellIndex: number) => (
+                  <TableCell key={`cell-${rowIndex}-${cellIndex}`}>{cell}</TableCell>
+                )) : <TableCell>Cell</TableCell>}
+              </TableRow>
+            )) : <TableRow><TableCell>Data</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      );
+    case 'tabs':
+        return (
+            <Tabs defaultValue={props.defaultValue} className={cn("w-full", props.className)} {...commonProps}>
+                <TabsList>
+                    {(props.items && Array.isArray(props.items)) ? props.items.map((item: any, index: number) => (
+                        <TabsTrigger value={item.value || `tab-${index}`} key={item.value || `tab-${index}`}>
+                            {item.title || 'Tab'}
+                        </TabsTrigger>
+                    )) : <TabsTrigger value="default-tab">Default Tab</TabsTrigger>}
+                </TabsList>
+                {(props.items && Array.isArray(props.items)) ? props.items.map((item: any, index: number) => (
+                    <TabsContent value={item.value || `tab-${index}`} key={`content-${item.value || `tab-${index}`}`} className="p-2">
+                        {item.content || 'Tab content.'}
+                    </TabsContent>
+                )) : <TabsContent value="default-tab" className="p-2">Default Content</TabsContent>}
+            </Tabs>
+        );
+    case 'textarea':
+      return <Textarea placeholder={props.placeholder} className={cn("w-full h-full", props.className)} {...commonProps} />;
     default:
       return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2">Unknown component: {type}</div>;
   }
@@ -105,28 +238,36 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
   const itemStartPos = useRef({ x: 0, y: 0 });
 
   const componentConfig = getComponentConfig(component.type);
-  const minWidth = componentConfig?.defaultSize.width ? Math.max(GRID_SIZE, componentConfig.defaultSize.width / 2) : GRID_SIZE;
-  const minHeight = componentConfig?.defaultSize.height ? Math.max(GRID_SIZE, componentConfig.defaultSize.height / 2) : GRID_SIZE;
+  const minWidth = componentConfig?.defaultSize.width ? Math.max(GRID_SIZE, componentConfig.defaultSize.width / 4) : GRID_SIZE; // Reduced min constraint slightly
+  const minHeight = componentConfig?.defaultSize.height ? Math.max(GRID_SIZE, componentConfig.defaultSize.height / 4) : GRID_SIZE; // Reduced min constraint slightly
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     const targetElement = e.target as HTMLElement;
 
-    // If clicking on resize handles, let ResizableBox handle it.
-    if (targetElement.classList.contains('react-resizable-handle') || 
-        (targetElement.parentElement && targetElement.parentElement.classList.contains('react-resizable-handle'))) {
+    if (targetElement.closest('.react-resizable-handle')) {
       return; 
     }
     
-    // Prevent drag if clicking on interactive form elements within this component
-    if (targetElement.closest('button, input, textarea, select')) {
-      return;
-    }
-    
-    const clickedComponentElement = targetElement.closest<HTMLElement>('[data-component-id]');
-    if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
-      return; 
-    }
+    // Prevent drag if clicking on interactive form elements within this component,
+    // unless it's the component itself (e.g. clicking a button to select it)
+    // This needs careful handling if the interactive element is nested.
+    const interactiveParent = targetElement.closest('button, input, textarea, select, [role="button"], [role="tab"], [role="radio"]');
+    const componentRootElement = targetElement.closest<HTMLElement>('[data-component-id]');
 
+    if (interactiveParent && componentRootElement && interactiveParent !== componentRootElement && componentRootElement.dataset.componentId === component.id) {
+        // Clicked on an interactive child of the current component, allow default behavior
+        // but still select the parent component if not already selected.
+        if (!isSelected) {
+          selectComponent(component.id);
+          if (!component.parentId) bringToFront(component.id);
+        }
+        return;
+    }
+    
+    if (componentRootElement && componentRootElement.dataset.componentId !== component.id) {
+      // Clicked on a child of a different component, let its own handler manage it.
+      return; 
+    }
     e.preventDefault(); 
     e.stopPropagation(); 
 
@@ -216,7 +357,7 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
             className={cn(
                 `react-resizable-handle react-resizable-handle-${handleAxis}`,
                 "bg-primary/80 opacity-0 group-hover/canvas-item:opacity-100 group-data-[selected=true]/canvas-item:opacity-100",
-                "transition-opacity duration-150 z-30" // Increased z-index from 10 to 30
+                "transition-opacity duration-150 z-30" 
             )}
             style={{
                 width: '10px', height: '10px',
@@ -240,18 +381,27 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
             onClick={(e) => {
                 const targetElement = e.target as HTMLElement;
 
-                // If click is on a resize handle, do nothing here, let ResizableBox manage it.
                 if (targetElement.closest('.react-resizable-handle')) {
                     return;
                 }
                 
                 const clickedComponentElement = targetElement.closest<HTMLElement>('[data-component-id]');
-        
-                if (targetElement.closest('button, input, textarea, select, a')) {
-                    if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
-                       return;
+                
+                // If clicked on an interactive child of the current component, let the event propagate.
+                // Also, don't select the parent if an interactive child was the primary target.
+                const interactiveChild = targetElement.closest('button, input, textarea, select, [role="button"], [role="tab"], [role="radio"]');
+                if (interactiveChild && clickedComponentElement && interactiveChild !== clickedComponentElement && clickedComponentElement.dataset.componentId === component.id) {
+                    // If it's an interactive child, don't stop propagation and don't re-select the parent.
+                    // This allows the interactive child to function.
+                    if (component.id !== selectedComponentId) {
+                        selectComponent(component.id);
+                         if (!component.parentId) bringToFront(component.id);
                     }
-                } else if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
+                    return;
+                }
+                
+                if (clickedComponentElement && clickedComponentElement.dataset.componentId !== component.id) {
+                    // Clicked on a different component's child, let its own handler deal with it.
                     return;
                 }
                 

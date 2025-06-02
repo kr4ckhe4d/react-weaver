@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState } from 'react'; // Added useState for interactive components
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { CanvasComponent } from '@/types';
 import { useDesign } from '@/contexts/design-context';
 import { Button } from '@/components/ui/button';
@@ -10,8 +10,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-
-// Import new ShadCN components for preview
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,21 +17,42 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-// ScrollArea is already imported
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableCaption, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { getComponentConfig } from './available-components';
 
-// Import specific actions from exampleActions.ts
-import { showMessage, anotherAction, updateExampleProgress } from '@/app-logic/exampleActions';
+// Dynamically import actions for preview - this is a conceptual placeholder
+// In a real Next.js app, direct imports work if files are in `app` or reachable.
+// For a truly dynamic "plugin" system, a more robust solution would be needed.
+import * as exampleActions from '@/app-logic/exampleActions';
+// Import more modules from app-logic as needed or build a dynamic importer
+// const appLogicModules: Record<string, any> = { exampleActions };
+
+type AppLogicModules = Record<string, Record<string, (...args: any[]) => any>>;
+
+const appLogicModules: AppLogicModules = {
+  exampleActions,
+  // Add other modules here if you create more files in src/app-logic
+  // e.g., myOtherLogic: import * as myOtherLogic from '@/app-logic/myOtherLogic';
+};
 
 
-const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, depth?: number }> = ({ component, depth = 0 }) => {
+interface PreviewState {
+  [key: string]: [any, React.Dispatch<React.SetStateAction<any>>];
+}
+
+const RenderPreviewComponentRecursive: React.FC<{ 
+  component: CanvasComponent, 
+  depth?: number,
+  previewStates: PreviewState,
+  allSetters: Record<string, React.Dispatch<React.SetStateAction<any>>>
+}> = ({ component, depth = 0, previewStates, allSetters }) => {
   const { type, props, children, id } = component;
-  const commonProps = { ...props }; 
+  let commonProps = { ...props }; 
 
   const childStyle: React.CSSProperties = component.parentId ? {
     position: 'absolute',
@@ -43,59 +62,74 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
     height: component.height,
   } : {};
 
-  // State for interactive components in preview
+  // Get state for components that use valueSource
+  let liveValue: any;
+  let liveSetter: React.Dispatch<React.SetStateAction<any>> | undefined;
+
+  if (props.valueSource && previewStates[props.valueSource]) {
+    [liveValue, liveSetter] = previewStates[props.valueSource];
+  } else {
+    // Fallback for components not using valueSource or if state not initialized
+    // This part handles local component state not driven by global `valueSource`
+    switch (type) {
+        case 'input': liveValue = props.value || ''; break;
+        case 'textarea': liveValue = props.value || ''; break;
+        case 'checkbox': liveValue = !!props.checked; break;
+        case 'switch': liveValue = !!props.checked; break;
+        // Add other component-specific default states if needed
+    }
+  }
+  
+  // State for interactive components NOT tied to valueSource (managed locally by each instance)
   const [accordionValue, setAccordionValue] = useState<string | string[] | undefined>(props.type === 'multiple' ? [] : props.defaultValue);
   const [radioValue, setRadioValue] = useState<string | undefined>(props.defaultValue);
   const [selectValue, setSelectValue] = useState<string | undefined>(props.value);
   const [tabsValue, setTabsValue] = useState<string | undefined>(props.defaultValue);
-  const [inputValue, setInputValue] = useState<string>(props.value || '');
-  const [textareaValue, setTextareaValue] = useState<string>(props.value || '');
-  const [checkboxChecked, setCheckboxChecked] = useState<boolean>(!!props.checked);
-  const [switchChecked, setSwitchChecked] = useState<boolean>(!!props.checked);
-  const [progressValue, setProgressValue] = useState<number>(props.value !== undefined ? props.value : 0); // For progress with valueSource
+  
+  // Local state for components that don't use valueSource or for their own internal changes
+  const [localInputValue, setLocalInputValue] = useState<string>(props.value || '');
+  const [localTextareaValue, setLocalTextareaValue] = useState<string>(props.value || '');
+  const [localCheckboxChecked, setLocalCheckboxChecked] = useState<boolean>(!!props.checked);
+  const [localSwitchChecked, setLocalSwitchChecked] = useState<boolean>(!!props.checked);
 
-  // Simulate state for progress bar if valueSource is used
-  React.useEffect(() => {
-    if (props.valueSource && props.value !== undefined) {
-      setProgressValue(props.value);
+
+  const handleAction = async () => {
+    if (!props.onClickAction) return;
+    const actionString = props.onClickAction as string;
+
+    if (actionString.includes('/')) {
+      const [moduleName, funcName] = actionString.split('/');
+      if (appLogicModules[moduleName] && typeof appLogicModules[moduleName][funcName] === 'function') {
+        try {
+          console.log(`Preview: Calling ${moduleName}/${funcName} with setters:`, allSetters);
+          // Pass allSetters object to the function
+          // For functions like setSpecificProgressValue that expect more args,
+          // the user needs to create more specific functions in app-logic
+          // or we need a way to configure these args in the editor.
+          // For now, it primarily supports functions expecting only setters.
+          await appLogicModules[moduleName][funcName](allSetters);
+        } catch (error) {
+          console.error(`Error executing action ${moduleName}/${funcName}:`, error);
+          alert(`Error in action ${moduleName}/${funcName}: ${error}`);
+        }
+      } else {
+        console.warn(`Preview: Action '${actionString}' not found or not a function.`);
+        alert(`Action '${actionString}' not found.`);
+      }
+    } else {
+       console.log(`Preview: Local action '${actionString}' would be triggered (not supported in this preview mode).`);
     }
-  }, [props.value, props.valueSource]);
+  };
 
 
   switch (type) {
     case 'button':
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { onClickAction, ...previewButtonProps } = commonProps;
-      let buttonClickHandler = () => {};
-      if (props.onClickAction) {
-        const actionString = props.onClickAction as string;
-        if (actionString === 'exampleActions/showMessage') {
-          buttonClickHandler = showMessage;
-        } else if (actionString === 'exampleActions/anotherAction') {
-          buttonClickHandler = anotherAction;
-        } else if (actionString === 'exampleActions/updateExampleProgress') {
-          // For actions requiring state setters, direct execution in preview is complex.
-          // We'll log a more specific message.
-          // The updateExampleProgress from exampleActions expects a setter function.
-          // In a real scenario, we'd need to link this to a specific progress bar's state setter.
-          // For preview simplicity, we'll just log.
-          buttonClickHandler = () => {
-            console.log("Preview: 'exampleActions/updateExampleProgress' would be called. This action normally updates a progress bar by receiving its state setter. In the generated code, you would pass the appropriate setProgressValue function.");
-            // To simulate a random change for any progress bar visible in preview (if needed for visual feedback):
-            // This is a very basic simulation and won't target a specific progress bar linked to this button.
-            // For more accurate preview, a more complex state management for preview would be needed.
-            // For now, we will call the imported function with a dummy setter that just logs.
-            updateExampleProgress((newVal) => console.log(`Preview: updateExampleProgress tried to set progress to ${newVal} (dummy setter).`));
-          };
-        } else if (actionString.includes('/')) {
-          buttonClickHandler = () => console.log(`Preview: Action '${actionString}' from your codebase would be triggered.`);
-        } else {
-           buttonClickHandler = () => console.log(`Preview: Local action '${actionString}' would be triggered (and defined in the generated component).`);
-        }
-      }
-      return <Button {...previewButtonProps} style={childStyle} onClick={buttonClickHandler}>{props.children || 'Button'}</Button>;
+      return <Button {...previewButtonProps} style={childStyle} onClick={handleAction}>{props.children || 'Button'}</Button>;
     case 'input':
-      return <Input {...commonProps} value={inputValue} onChange={(e) => setInputValue(e.target.value)} className={cn("w-full h-full", props.className)} style={childStyle} />;
+      return <Input {...commonProps} value={props.valueSource ? liveValue : localInputValue} 
+                onChange={(e) => props.valueSource && liveSetter ? liveSetter(e.target.value) : setLocalInputValue(e.target.value)} 
+                className={cn("w-full h-full", props.className)} style={childStyle} />;
     case 'text':
       return <p {...commonProps} className={cn("p-1", props.className)} style={childStyle}>{props.children || 'Text Block'}</p>;
     case 'card':
@@ -105,10 +139,10 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
             <ShadCardTitle>{props.title || 'Card Title'}</ShadCardTitle>
             {props.description && <ShadCardDescription>{props.description}</ShadCardDescription>}
           </ShadCardHeader>
-          <ShadCardContent className="flex-grow relative p-2"> {/* Added p-2 for child spacing */}
+          <ShadCardContent className="flex-grow relative p-2">
             {(!children || children.length === 0) && (props.content || 'Card Content')}
             {children && children.map(child => (
-                <RenderPreviewComponentRecursive key={`preview-child-${child.id}-${depth}`} component={child} depth={depth + 1}/>
+                <RenderPreviewComponentRecursive key={`preview-child-${child.id}-${depth}`} component={child} depth={depth + 1} previewStates={previewStates} allSetters={allSetters}/>
             ))}
           </ShadCardContent>
         </ShadCard>
@@ -118,7 +152,10 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
     case 'checkbox':
         return (
             <div className="flex items-center space-x-2 p-1" style={childStyle}>
-                <Checkbox id={`${id}-preview-checkbox`} checked={checkboxChecked} onCheckedChange={(checked) => setCheckboxChecked(Boolean(checked))} {...commonProps} />
+                <Checkbox id={`${id}-preview-checkbox`} 
+                    checked={props.valueSource ? liveValue : localCheckboxChecked} 
+                    onCheckedChange={(checked) => props.valueSource && liveSetter ? liveSetter(Boolean(checked)) : setLocalCheckboxChecked(Boolean(checked))} 
+                    {...commonProps} />
                 <label htmlFor={`${id}-preview-checkbox`} className="text-sm font-medium leading-none">
                     {props.label || "Checkbox"}
                 </label>
@@ -127,7 +164,10 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
     case 'switch':
         return (
              <div className="flex items-center space-x-2 p-1" style={childStyle}>
-                <Switch id={`${id}-preview-switch`} checked={switchChecked} onCheckedChange={setSwitchChecked} {...commonProps} />
+                <Switch id={`${id}-preview-switch`} 
+                    checked={props.valueSource ? liveValue : localSwitchChecked} 
+                    onCheckedChange={(checked) => props.valueSource && liveSetter ? liveSetter(checked) : setLocalSwitchChecked(checked)} 
+                    {...commonProps} />
                 <label htmlFor={`${id}-preview-switch`}>{props.label || "Toggle"}</label>
             </div>
         );
@@ -164,9 +204,8 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
     case 'label':
       return <Label className={cn("p-1", props.className)} style={childStyle} {...commonProps}>{props.children || 'Label'}</Label>;
     case 'progress':
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valueSource, ...progressPreviewProps } = commonProps;
-      const currentProgressValue = props.valueSource ? progressValue : props.value;
+      const currentProgressValue = props.valueSource ? liveValue : props.value;
       return <Progress value={currentProgressValue} className={cn("w-full", props.className)} style={childStyle} {...progressPreviewProps} />;
     case 'radioGroup':
       return (
@@ -185,7 +224,7 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
             <div className="p-2 relative min-h-full">
                 {(!children || children.length === 0) && (props.contentPlaceholder || 'Scrollable Content Area')}
                 {children && children.map(child => (
-                     <RenderPreviewComponentRecursive key={`preview-child-${child.id}-${depth}`} component={child} depth={depth + 1}/>
+                     <RenderPreviewComponentRecursive key={`preview-child-${child.id}-${depth}`} component={child} depth={depth + 1} previewStates={previewStates} allSetters={allSetters}/>
                 ))}
             </div>
         </ScrollArea>
@@ -249,14 +288,96 @@ const RenderPreviewComponentRecursive: React.FC<{ component: CanvasComponent, de
             </Tabs>
         );
     case 'textarea':
-      return <Textarea placeholder={props.placeholder} value={textareaValue} onChange={(e) => setTextareaValue(e.target.value)} className={cn("w-full h-full", props.className)} style={childStyle} {...commonProps} />;
+      return <Textarea placeholder={props.placeholder} 
+                 value={props.valueSource ? liveValue : localTextareaValue} 
+                 onChange={(e) => props.valueSource && liveSetter ? liveSetter(e.target.value) : setLocalTextareaValue(e.target.value)} 
+                 className={cn("w-full h-full", props.className)} style={childStyle} {...commonProps} />;
     default:
       return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2" style={childStyle}>Unknown component: {type}</div>;
   }
 };
 
 const DesignPreviewRenderer: React.FC = () => {
-  const { components, canvasSize } = useDesign();
+  const { components: designComponents, canvasSize } = useDesign();
+
+  // Central state for all valueSource-driven states
+  const [previewStates, setPreviewStates] = useState<PreviewState>({});
+  const [allSetters, setAllSetters] = useState<Record<string, React.Dispatch<React.SetStateAction<any>>>>({});
+
+  useEffect(() => {
+    const newStates: PreviewState = {};
+    const newSetters: Record<string, React.Dispatch<React.SetStateAction<any>>> = {};
+    
+    const allValueSources = new Set<string>();
+
+    function collectValueSources(comps: CanvasComponent[]) {
+      comps.forEach(comp => {
+        if (comp.props.valueSource) {
+          allValueSources.add(comp.props.valueSource);
+        }
+        if (comp.children) {
+          collectValueSources(comp.children);
+        }
+      });
+    }
+    collectValueSources(designComponents);
+
+    // Initialize states only if they don't exist
+    // This is tricky because useState hook calls must be consistent.
+    // For a dynamic number of states, a reducer or a single state object is better.
+    // Let's manage them in a single object for now, and re-evaluate if needed.
+    
+    // This effect runs once to initialize states based on initial designComponents
+    // A more robust solution might involve a context or reducer for these dynamic states
+    // For simplicity here, we're initializing based on the *current* set of valueSources found.
+    // If valueSources are added/removed dynamically, this initialization might need to be more clever.
+
+  }, [designComponents]); // Rerun if designComponents change to potentially add new valueSources
+
+  // This is where we'll actually create the states using useState.
+  // The challenge is that useState calls must be in the same order and count.
+  // We'll create a memoized list of unique value sources and then create states for them.
+
+  const uniqueValueSources = useMemo(() => {
+    const sources = new Set<string>();
+    function collect(comps: CanvasComponent[]) {
+      comps.forEach(comp => {
+        if (comp.props.valueSource) sources.add(comp.props.valueSource);
+        if (comp.children) collect(comp.children);
+      });
+    }
+    collect(designComponents);
+    return Array.from(sources);
+  }, [designComponents]);
+
+  // Temporary any to manage dynamic state creation, ideally use a reducer.
+  const statesManager: Record<string, [any, React.Dispatch<React.SetStateAction<any>>]> = {};
+  const settersForActions: Record<string, React.Dispatch<React.SetStateAction<any>>> = {};
+
+  uniqueValueSources.forEach(sourceName => {
+    // Find a component that uses this source to get an initial value
+    let initialValue: any = null;
+    const compUsingSource = designComponents.find(c => c.props.valueSource === sourceName) || 
+                            designComponents.flatMap(c => c.children || []).find(child => child.props.valueSource === sourceName);
+    
+    if (compUsingSource) {
+      const compConfig = getComponentConfig(compUsingSource.type);
+      if (compUsingSource.props.value !== undefined) {
+        initialValue = compUsingSource.props.value;
+      } else if (compConfig?.propTypes.value?.defaultValue !== undefined) {
+        initialValue = compConfig.propTypes.value.defaultValue;
+      } else if (compUsingSource.type === 'checkbox' || compUsingSource.type === 'switch') {
+        initialValue = compConfig?.propTypes.checked?.defaultValue ?? false;
+      }
+    }
+    
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const [value, setValue] = useState(initialValue);
+    statesManager[sourceName] = [value, setValue];
+    const setterName = `set${sourceName.charAt(0).toUpperCase() + sourceName.slice(1)}`;
+    settersForActions[setterName] = setValue;
+  });
+
 
   const previewContainerStyle: React.CSSProperties = {
     width: `${canvasSize.width}px`,
@@ -270,7 +391,7 @@ const DesignPreviewRenderer: React.FC = () => {
   return (
     <ScrollArea className="w-full h-full bg-muted/20"> 
         <div style={previewContainerStyle}>
-            {components.filter(c => !c.parentId) 
+            {designComponents.filter(c => !c.parentId) 
             .sort((a,b) => a.zIndex - b.zIndex)
             .map((comp) => (
             <div
@@ -284,7 +405,7 @@ const DesignPreviewRenderer: React.FC = () => {
                 zIndex: comp.zIndex,
                 }}
             >
-                <RenderPreviewComponentRecursive component={comp} />
+                <RenderPreviewComponentRecursive component={comp} previewStates={statesManager} allSetters={settersForActions} />
             </div>
             ))}
         </div>
@@ -293,6 +414,3 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
-
-
-    

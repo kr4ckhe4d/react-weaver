@@ -6,35 +6,21 @@ import Header from './header';
 import ComponentLibraryPanel from './component-library-panel';
 import CanvasArea from './canvas-area';
 import PropEditorPanel from './prop-editor-panel';
-import CodePreviewDialog, { type CodePreviewDialogRef } from './code-preview-dialog';
+import CodePreviewDialog, { type CodePreviewDialogRef } from './code-preview-dialog'; // Will be unused but keep for potential future use
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DesignPreviewRenderer from './design-preview-renderer';
 
 const ReactWeaverApp: React.FC = () => {
-  const { generateCode, components } = useDesign();
+  const { components /* generateCode removed */ } = useDesign();
   const { toast } = useToast();
-  const codeDialogRef = useRef<CodePreviewDialogRef>(null);
+  const codeDialogRef = useRef<CodePreviewDialogRef>(null); // Keep for now, maybe useful later
 
-  const handleGenerateCode = async () => {
-    if (components.length === 0) {
-      toast({
-        title: "Canvas Empty",
-        description: "Add some components to the canvas before generating code.",
-        variant: "destructive",
-      });
-      return;
-    }
-    toast({ title: "Generating Code...", description: "Preparing your React components." });
-    const code = await generateCode();
-    if (codeDialogRef.current) {
-      codeDialogRef.current.open(code);
-    }
-  };
+  // handleGenerateCode function removed
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-      <Header onGenerateCodeClick={handleGenerateCode} />
+      <Header /*onGenerateCodeClick={handleGenerateCode} removed */ />
       <Tabs defaultValue="editor" className="flex-1 flex flex-col overflow-hidden">
         <div className="flex justify-center border-b">
           <TabsList className="bg-transparent p-0 rounded-none">
@@ -59,7 +45,8 @@ const ReactWeaverApp: React.FC = () => {
           )}
         </TabsContent>
       </Tabs>
-      <CodePreviewDialog ref={codeDialogRef} />
+      {/* CodePreviewDialog is no longer opened by a button, consider removing or repurposing */}
+      {/* <CodePreviewDialog ref={codeDialogRef} /> */}
     </div>
   );
 };

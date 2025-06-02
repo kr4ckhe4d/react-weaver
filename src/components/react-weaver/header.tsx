@@ -2,16 +2,16 @@
 "use client";
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { IconCode, IconDownload } from './icons';
+import { IconDownload } from './icons'; // IconCode removed
 import { useDesign } from '@/contexts/design-context';
-import type { CodePreviewDialogRef } from './code-preview-dialog'; // Corrected import path
+// CodePreviewDialogRef import removed
 import { downloadTextFile } from '@/lib/download';
 
 interface HeaderProps {
-  onGenerateCodeClick: () => void;
+  // onGenerateCodeClick prop removed
 }
 
-const Header: React.FC<HeaderProps> = ({ onGenerateCodeClick }) => {
+const Header: React.FC<HeaderProps> = (/*{ onGenerateCodeClick }*/) => {
   const { getDesignJSON, components } = useDesign();
 
   const handleExportJson = () => {
@@ -31,10 +31,7 @@ const Header: React.FC<HeaderProps> = ({ onGenerateCodeClick }) => {
           <IconDownload className="mr-2 h-4 w-4" />
           Export Design (JSON)
         </Button>
-        <Button size="sm" onClick={onGenerateCodeClick} disabled={components.length === 0}>
-          <IconCode className="mr-2 h-4 w-4" />
-          Generate React Code
-        </Button>
+        {/* Generate React Code button removed */}
       </div>
     </header>
   );

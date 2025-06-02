@@ -49,7 +49,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
         defaultValue: 'default',
         label: 'Size'
       },
-      onClickAction: { type: 'string', label: 'onClick Action (e.g. localAction or logicFile/importedAction)', defaultValue: '' },
+      onClickAction: { type: 'string', label: 'onClick Action (e.g. logicFile/importedAction)', defaultValue: '' },
     },
   },
   {
@@ -61,6 +61,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     propTypes: {
       placeholder: { type: 'string', defaultValue: 'Enter text...', label: 'Placeholder' },
       type: { type: 'select', options: ['text', 'password', 'email', 'number'], defaultValue: 'text', label: 'Type' },
+      valueSource: { type: 'string', label: 'Value Source (State Var)', defaultValue: '' },
     },
   },
   {
@@ -107,7 +108,8 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     defaultSize: { width: 150, height: 24 },
     propTypes: {
         label: { type: 'string', defaultValue: 'Accept terms', label: 'Label'},
-        checked: { type: 'boolean', defaultValue: false, label: 'Checked'}
+        checked: { type: 'boolean', defaultValue: false, label: 'Checked'},
+        valueSource: { type: 'string', label: 'Checked Source (State Var)', defaultValue: '' },
     }
   },
   {
@@ -117,7 +119,8 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     defaultProps: { checked: false },
     defaultSize: { width: 60, height: 30 },
     propTypes: {
-        checked: {type: 'boolean', defaultValue: false, label: 'Enabled'}
+        checked: {type: 'boolean', defaultValue: false, label: 'Enabled'},
+        valueSource: { type: 'string', label: 'Enabled Source (State Var)', defaultValue: '' },
     }
   },
   {
@@ -185,6 +188,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     defaultSize: { width: 120, height: 24 },
     propTypes: {
       children: { type: 'string', defaultValue: 'This is a label', label: 'Text' },
+      valueSource: { type: 'string', label: 'Text Source (State Var)', defaultValue: '' },
     },
   },
   {
@@ -295,6 +299,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     defaultSize: { width: 250, height: 100 },
     propTypes: {
       placeholder: { type: 'string', defaultValue: 'Type your message here.', label: 'Placeholder' },
+      valueSource: { type: 'string', label: 'Value Source (State Var)', defaultValue: '' },
     },
   },
 ];

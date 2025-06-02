@@ -34,7 +34,6 @@ try {
   (async () => {
     try {
       const exampleActionsModule = await importExampleActions();
-      // Ensure we access the actual exports, handling potential default export wrappers
       const resolvedExampleActions = exampleActionsModule.default && typeof exampleActionsModule.default === 'object' 
                                     ? exampleActionsModule.default 
                                     : exampleActionsModule;
@@ -68,17 +67,16 @@ const RenderPreviewComponentRecursive: React.FC<{
     height: component.height,
   } : {};
 
-  let liveValue: any; // Used for components that have a primary value linked to valueSource
+  let liveValue: any; 
   if (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource)) {
     liveValue = valueSourceStates[props.valueSource];
   } else {
-    // Fallback for components NOT controlled by valueSource, to use their static prop value
     switch (type) {
         case 'input': liveValue = props.value || ''; break;
         case 'textarea': liveValue = props.value || ''; break;
         case 'checkbox': liveValue = !!props.checked; break;
         case 'switch': liveValue = !!props.checked; break;
-        // progress uses its own logic below, directly checking valueSourceStates or props.value
+        case 'label': liveValue = props.children || ''; break; 
     }
   }
   
@@ -87,7 +85,6 @@ const RenderPreviewComponentRecursive: React.FC<{
   const [selectValue, setSelectValue] = useState<string | undefined>(props.value);
   const [tabsValue, setTabsValue] = useState<string | undefined>(props.defaultValue);
 
-  // Local state for input-like components when NOT controlled by valueSource
   const [localInputValue, setLocalInputValue] = useState<string>(props.value || '');
   const [localTextareaValue, setLocalTextareaValue] = useState<string>(props.value || '');
   const [localCheckboxChecked, setLocalCheckboxChecked] = useState<boolean>(!!props.checked);
@@ -127,7 +124,7 @@ const RenderPreviewComponentRecursive: React.FC<{
   switch (type) {
     case 'button':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { onClickAction: _onClickActionIgnored, ...previewButtonProps } = commonProps;
+      const { onClickAction: _onClickActionIgnoredButton, ...previewButtonProps } = commonProps;
       return <Button {...previewButtonProps} style={childStyle} onClick={handleAction}>{props.children || 'Button'}</Button>;
     case 'input':
       const inputSetter = getSetterForValueSource(props.valueSource);
@@ -208,7 +205,12 @@ const RenderPreviewComponentRecursive: React.FC<{
     case 'badge':
       return <Badge variant={props.variant as "default" | "secondary" | "destructive" | "outline"} className={cn(props.className)} style={childStyle} {...commonProps}>{props.children || 'Badge'}</Badge>;
     case 'label':
-      return <Label className={cn("p-1", props.className)} style={childStyle} {...commonProps}>{props.children || 'Label'}</Label>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { valueSource: _valueSourceIgnoredLabel, ...labelPreviewProps } = commonProps;
+      const labelText = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
+                        ? String(valueSourceStates[props.valueSource])
+                        : (props.children || 'Label');
+      return <Label className={cn("p-1", props.className)} style={childStyle} {...labelPreviewProps}>{labelText}</Label>;
     case 'progress':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valueSource: _valueSourceIgnoredProgress, ...progressPreviewProps } = commonProps;
@@ -331,7 +333,7 @@ const DesignPreviewRenderer: React.FC = () => {
     const newInitialStates: Record<string, any> = {};
     let updateNeeded = false;
 
-    const currentDesignComponents = designComponents; // Capture current designComponents
+    const currentDesignComponents = designComponents; 
 
     uniqueValueSources.forEach(sourceName => {
       if (!valueSourceStates.hasOwnProperty(sourceName)) {
@@ -349,7 +351,7 @@ const DesignPreviewRenderer: React.FC = () => {
             }
             return undefined;
         };
-        compWithValueSource = findComp(currentDesignComponents); // Use captured designComponents
+        compWithValueSource = findComp(currentDesignComponents);
 
         if (compWithValueSource) {
           const compConfig = getComponentConfig(compWithValueSource.type);
@@ -361,11 +363,14 @@ const DesignPreviewRenderer: React.FC = () => {
             initialValue = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? '');
           } else if (compWithValueSource.type === 'checkbox' || compWithValueSource.type === 'switch') {
              initialValue = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);
+          } else if (compWithValueSource.type === 'label') {
+             initialValue = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');
           } else { 
             if (props.value !== undefined) initialValue = props.value;
             else if (props.checked !== undefined) initialValue = props.checked;
             else if (compConfig?.propTypes.value?.defaultValue !== undefined) initialValue = compConfig.propTypes.value.defaultValue;
             else if (compConfig?.propTypes.checked?.defaultValue !== undefined) initialValue = compConfig.propTypes.checked.defaultValue;
+            else if (compConfig?.propTypes.children?.defaultValue !== undefined) initialValue = String(compConfig.propTypes.children.defaultValue);
             else initialValue = null; 
           }
         }
@@ -376,7 +381,7 @@ const DesignPreviewRenderer: React.FC = () => {
     if (updateNeeded) {
       setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources]); // Now only depends on uniqueValueSources
+  }, [uniqueValueSources]); 
 
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
@@ -395,7 +400,7 @@ const DesignPreviewRenderer: React.FC = () => {
       };
     });
     return setters;
-  }, [uniqueValueSources]); // Depends on uniqueValueSources and setValueSourceStates (implicitly, as setter is stable)
+  }, [uniqueValueSources]); 
 
 
   const previewContainerStyle: React.CSSProperties = {
@@ -433,5 +438,3 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
-
-    

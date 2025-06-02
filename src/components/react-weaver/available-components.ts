@@ -49,6 +49,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
         defaultValue: 'default',
         label: 'Size'
       },
+      onClickAction: { type: 'string', label: 'onClick Action Name', defaultValue: '' },
     },
   },
   {
@@ -170,7 +171,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     name: 'Badge',
     icon: IconBadge,
     defaultProps: { children: 'Badge', variant: 'default' },
-    defaultSize: { width: 80, height: 28 }, // Slightly taller for better text fit
+    defaultSize: { width: 80, height: 28 }, 
     propTypes: {
       children: { type: 'string', defaultValue: 'Badge', label: 'Text' },
       variant: { type: 'select', options: ['default', 'secondary', 'destructive', 'outline'], defaultValue: 'default', label: 'Variant' },
@@ -191,9 +192,10 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     name: 'Progress Bar',
     icon: IconProgress,
     defaultProps: { value: 60 },
-    defaultSize: { width: 200, height: 16 }, // Default h-4 from shadcn
+    defaultSize: { width: 200, height: 16 },
     propTypes: {
       value: { type: 'number', defaultValue: 60, label: 'Value (0-100)' },
+      valueSource: { type: 'string', label: 'Value Source (State Var)', defaultValue: '' },
     },
   },
   {
@@ -234,7 +236,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     name: 'Separator',
     icon: IconSeparator,
     defaultProps: { orientation: 'horizontal' },
-    defaultSize: { width: 200, height: 1 }, // Height 1 for horizontal
+    defaultSize: { width: 200, height: 1 }, 
     propTypes: {
       orientation: { type: 'select', options: ['horizontal', 'vertical'], defaultValue: 'horizontal', label: 'Orientation (Note: Resize to change visual orientation)' },
     },
@@ -243,7 +245,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     id: 'skeleton',
     name: 'Skeleton',
     icon: IconSkeleton,
-    defaultProps: { className: 'h-4 w-full rounded-md' }, // User controls size via ResizableBox, className fine-tunes appearance
+    defaultProps: { className: 'h-4 w-full rounded-md' }, 
     defaultSize: { width: 200, height: 20 },
     propTypes: {
       className: { type: 'string', defaultValue: 'h-4 w-full rounded-md', label: 'Tailwind Classes for appearance' },

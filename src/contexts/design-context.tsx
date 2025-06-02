@@ -13,11 +13,11 @@ interface DesignContextType {
   updateComponentSize: (id: string, size: { width: number; height: number }, parentId?: string | null) => void;
   selectComponent: (id: string | null) => void;
   deleteComponent: (id: string, parentId?: string | null) => void;
-  bringToFront: (id: string) => void; // Note: Z-index for children is more complex, handled within parent context
-  sendToBack: (id: string) => void;   // Note: Z-index for children is more complex
+  bringToFront: (id: string) => void; 
+  sendToBack: (id: string) => void;   
   getDesignJSON: () => string;
   generateCode: () => Promise<string>;
-  suggestProps: (componentType: string, currentProps: Record<string, any>) => Promise<Record<string, any>>;
+  // suggestProps: (componentType: string, currentProps: Record<string, any>) => Promise<Record<string, any>>;
   canvasSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
 }
@@ -49,7 +49,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       y: snapToGrid(position.y),
       width: snapToGrid(componentConfig.defaultSize.width),
       height: snapToGrid(componentConfig.defaultSize.height),
-      zIndex: 0, // Z-index for children is relative to parent; for top-level, calculated below
+      zIndex: 0, 
       parentId: parentId,
       children: componentConfig.isContainer ? [] : undefined,
     };
@@ -91,24 +91,15 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const findParentId = (items: CanvasComponent[], childId: string): string | null | undefined => {
     for (const item of items) {
         if (item.children?.some(child => child.id === childId)) {
-            return item.id; // Current item is the direct parent
+            return item.id; 
         }
         if (item.children) {
             const foundParentIdRecursive = findParentId(item.children, childId);
-            if (foundParentIdRecursive !== undefined) { // If a parent was found deeper
-                 // If foundParentIdRecursive is null, it means a grandchild's parentId was null, which is an error state for nested children.
-                 // But for our logic, if a recursive call returns an ID, that's the parent.
-                 // If it returns undefined, the search continues.
-                 return foundParentIdRecursive; // This could be an ID string or null if the direct parent of childId has parentId: null
+            if (foundParentIdRecursive !== undefined) { 
+                 return foundParentIdRecursive; 
             }
         }
     }
-    // If we reach here, childId is either top-level (its parentId should be null) or not found in this branch
-    // To determine if it's top level, we check its actual parentId prop after finding the component.
-    // For now, returning undefined means "continue searching" or "it's top level".
-    // A more robust approach might be needed if we strictly differentiate between "not found" and "is top level".
-    // For the purpose of updateComponentRecursive, if `findParentId` returns `undefined` for a known `childId`,
-    // it implies the component is top-level (parentId: null).
     const targetComponent = items.find(c => c.id === childId);
     if (targetComponent && targetComponent.parentId === null) return null;
 
@@ -138,10 +129,8 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     items: CanvasComponent[],
     idToDelete: string
   ): CanvasComponent[] => {
-    // Filter out the component if it's at the current level
     const filteredItems = items.filter(comp => comp.id !== idToDelete);
     
-    // Recursively process children
     return filteredItems.map(comp => {
       if (comp.children && comp.children.length > 0) {
         const newChildren = deleteComponentRecursive(comp.children, idToDelete);
@@ -152,7 +141,6 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
   
   const deleteComponent = useCallback((id: string, parentIdIgnored?: string | null) => {
-      // parentId is not strictly needed here anymore since deleteComponentRecursive will find it by ID
       setComponents(prev => deleteComponentRecursive(prev, id));
       if (selectedComponentId === id) {
           setSelectedComponentId(null);
@@ -161,32 +149,29 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
 
   const bringToFront = useCallback((id: string) => {
-    // This primarily affects top-level components. Children's z-index is within their parent.
     setComponents(prev => {
-      const comp = prev.find(c => c.id === id && !c.parentId); // Only for top-level
-      if (!comp) return prev;
-      const maxZIndex = prev.reduce((max, c) => Math.max(max, c.zIndex), 0);
+      const compToUpdate = prev.find(c => c.id === id && !c.parentId); 
+      if (!compToUpdate) return prev;
+      const maxZIndex = prev.reduce((max, c) => c.parentId ? max : Math.max(max, c.zIndex), 0);
       return prev.map(c => (c.id === id ? { ...c, zIndex: maxZIndex + 1 } : c));
     });
   }, []);
 
   const sendToBack = useCallback((id: string) => {
-    // This primarily affects top-level components.
     setComponents(prev => {
-      const comp = prev.find(c => c.id === id && !c.parentId); // Only for top-level
-      if (!comp) return prev;
+      const compToUpdate = prev.find(c => c.id === id && !c.parentId);
+      if (!compToUpdate) return prev;
 
-      const otherMinZIndex = prev
-        .filter(c => c.id !== id && !c.parentId)
+      const topLevelComponents = prev.filter(c => !c.parentId);
+      if (topLevelComponents.length <= 1) return prev.map(c => c.id === id ? { ...c, zIndex: 1 } : c);
+      
+      const minZIndexAmongOthers = topLevelComponents
+        .filter(c => c.id !== id)
         .reduce((min, c) => Math.min(min, c.zIndex), Infinity);
       
       let targetZIndex = 1;
-      if (otherMinZIndex !== Infinity && otherMinZIndex > 1) {
-        targetZIndex = otherMinZIndex -1;
-      } else if (prev.filter(c => !c.parentId).length > 1) {
-         const sortedZIndexes = [...new Set(prev.filter(c => !c.parentId).map(c => c.zIndex))].sort((a,b) => a-b);
-         if (sortedZIndexes.length > 0 && sortedZIndexes[0] > 1) targetZIndex = sortedZIndexes[0] -1;
-         else targetZIndex = 1; // Default to 1 if it's the only one or all others are at 1
+      if (minZIndexAmongOthers !== Infinity && minZIndexAmongOthers > 1) {
+        targetZIndex = minZIndexAmongOthers -1;
       }
       
       return prev.map(c => {
@@ -194,7 +179,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           return { ...c, zIndex: targetZIndex };
         }
         return c;
-      }).sort((a,b) => a.zIndex - b.zIndex); // Re-sort might be needed if z-indices are not contiguous
+      });
     });
   }, []);
 
@@ -209,66 +194,181 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [components, canvasSize]);
 
   const generateCode = async () => {
-    // Simplified: needs recursive generation for children.
-    const generateComponentCode = (comp: CanvasComponent): string => {
+    const imports = new Set<string>();
+    imports.add("import React, { useState, useEffect } from 'react';"); // Ensure useState for generated logic
+
+    const allComponentsFlat: CanvasComponent[] = [];
+    function flattenComponents(comps: CanvasComponent[], parent?: CanvasComponent) {
+      comps.forEach(comp => {
+        allComponentsFlat.push({...comp, parentId: parent?.id ?? null}); // Ensure parentId is correctly set for flat list
+        if (comp.children) {
+          flattenComponents(comp.children, comp);
+        }
+      });
+    }
+    flattenComponents(components);
+
+    const actions = new Set<string>();
+    const states = new Map<string, { initialValue: any, setterName: string }>();
+
+    allComponentsFlat.forEach(comp => {
+      const componentConfig = getComponentConfig(comp.type);
+      if (!componentConfig) return;
+
+      // Collect imports
+      // Basic import strategy, might need refinement for specific components not directly matching folder names
+      const componentName = comp.type.charAt(0).toUpperCase() + comp.type.slice(1);
+      // Special cases or mapping if component name differs from file name
+      const importMap: Record<string, string> = {
+          'Text': 'p', // Or handle differently for custom Text component
+          'Image': 'img',
+          'Placeholder': 'div', // Example for placeholder
+          // Add ShadCN component names if they differ from 'id'
+          'Card': 'Card, CardHeader, CardTitle, CardDescription, CardContent',
+          'Accordion': 'Accordion, AccordionItem, AccordionTrigger, AccordionContent',
+          'Alert': 'Alert, AlertTitle, AlertDescription',
+          'RadioGroup': 'RadioGroup, RadioGroupItem',
+          'Table': 'Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableCaption',
+          'Tabs': 'Tabs, TabsList, TabsTrigger, TabsContent',
+      };
+      
+      const importName = importMap[componentName] || componentName;
+      if (!['p', 'img', 'div'].includes(importName) && componentConfig) {
+        // For multi-part imports like Card
+        if (importName.includes(',')) {
+            const parts = importName.split(',').map(p => p.trim());
+            imports.add(`import { ${parts.join(', ')} } from '@/components/ui/${comp.type}';`);
+        } else {
+            imports.add(`import { ${importName} } from '@/components/ui/${comp.type}';`);
+        }
+      }
+
+
+      if (comp.type === 'button' && comp.props.onClickAction && comp.props.onClickAction.trim() !== '') {
+        actions.add(comp.props.onClickAction.trim());
+      }
+      if (comp.type === 'progress' && comp.props.valueSource && comp.props.valueSource.trim() !== '') {
+        const stateName = comp.props.valueSource.trim();
+        if (!states.has(stateName)) {
+          const progressConfig = getComponentConfig('progress');
+          const initialVal = comp.props.value !== undefined 
+                             ? comp.props.value 
+                             : progressConfig?.propTypes.value.defaultValue ?? 0;
+          states.set(stateName, {
+            initialValue: initialVal,
+            setterName: `set${stateName.charAt(0).toUpperCase() + stateName.slice(1)}`
+          });
+        }
+      }
+    });
+    
+    let stateDeclarations = '';
+    states.forEach((val, key) => {
+      stateDeclarations += `  const [${key}, ${val.setterName}] = useState(${JSON.stringify(val.initialValue)});\n`;
+    });
+
+    let actionDeclarations = '';
+    actions.forEach(actionName => {
+      let settersComment = "// Available state setters: ";
+      const availableSetters: string[] = [];
+      states.forEach((val, key) => {
+        availableSetters.push(val.setterName);
+      });
+      settersComment += availableSetters.join(', ') || "none";
+      actionDeclarations += `  const ${actionName} = () => {\n    console.log('Action "${actionName}" triggered. Implement your logic here.');\n    // ${settersComment}\n    // Example: ${availableSetters.length > 0 ? `${availableSetters[0]}(prev => (prev + 10) % 110);` : ''}\n  };\n`;
+    });
+
+    const generateComponentCodeInternal = (comp: CanvasComponent): string => {
       const componentConfig = getComponentConfig(comp.type);
       if (!componentConfig) return `// Unknown component type: ${comp.type}`;
 
-      const propsString = Object.entries(comp.props)
-        .map(([key, value]) => {
-          if (typeof value === 'string') return `${key}="${value}"`;
-          if (typeof value === 'boolean' || typeof value === 'number') return `${key}={${value}}`;
-          if (key === 'children' && typeof value === 'string' && !comp.children?.length) return `children="${value}"`
-          return `${key}={${JSON.stringify(value)}}`; // For objects/arrays, might need refinement
-        })
-        .join(' ');
+      const tempProps = { ...comp.props };
+      const propsToProcess: Record<string, string> = {};
       
-      const childrenString = comp.children && comp.children.length > 0
-        ? comp.children.map(child => generateComponentCode(child)).join('\n')
-        : (comp.props.children && typeof comp.props.children === 'string' && !componentConfig.isContainer) ? comp.props.children : '';
+      // Handle onClickAction for buttons
+      if (comp.type === 'button' && tempProps.onClickAction && tempProps.onClickAction.trim() !== '') {
+        propsToProcess.onClick = `{${tempProps.onClickAction.trim()}}`;
+        delete tempProps.onClickAction;
+      }
+
+      // Handle valueSource for progress bars
+      if (comp.type === 'progress' && tempProps.valueSource && tempProps.valueSource.trim() !== '') {
+        propsToProcess.value = `{${tempProps.valueSource.trim()}}`;
+        delete tempProps.valueSource;
+        delete tempProps.value; // Don't render static value if dynamic source is used
+      }
+      
+      // Process remaining props
+      Object.entries(tempProps).forEach(([key, value]) => {
+        if (key === 'children' && typeof value === 'string' && !comp.children?.length && !componentConfig.isContainer) {
+          // This will be handled by childrenString logic later
+        } else if (typeof value === 'string') {
+          propsToProcess[key] = `"${value}"`;
+        } else if (typeof value === 'boolean' || typeof value === 'number') {
+          propsToProcess[key] = `{${value}}`;
+        } else if (key !== 'children') { // children object/array handled separately
+          propsToProcess[key] = `{${JSON.stringify(value)}}`;
+        }
+      });
+      
+      const propsString = Object.entries(propsToProcess)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(' ');
+
+      let childrenString = '';
+      if (comp.children && comp.children.length > 0) {
+        childrenString = comp.children.map(child => generateComponentCodeInternal(child)).join('\n');
+      } else if (comp.props.children && typeof comp.props.children === 'string' && !componentConfig.isContainer) {
+        childrenString = comp.props.children;
+      } else if (componentConfig.isContainer && comp.props.content && typeof comp.props.content === 'string') {
+        // Default content for containers like Card if no children are present
+        childrenString = comp.props.content;
+      }
+
 
       let componentName = comp.type.charAt(0).toUpperCase() + comp.type.slice(1);
-      if (comp.type === 'text') componentName = 'p'; // Or handle more robustly
-      if (comp.type === 'image') componentName = 'img';
+      // Special mapping for HTML tags or complex ShadCN component names
+      if (comp.type === 'text') componentName = 'p';
+      else if (comp.type === 'image') componentName = 'img';
+      else if (comp.type === 'placeholder') componentName = 'div'; // Assuming placeholder is a div
+      // For ShadCN components, we mostly use the capitalized ID (e.g., 'button' -> 'Button')
+      // Specific mappings if needed (e.g. 'card' uses 'Card', 'CardHeader', etc., handled by imports)
+      // The main wrapper for a card would be 'Card'.
+
+      const styleProps = comp.parentId 
+        ? `style={{ position: 'absolute', left: ${comp.x}, top: ${comp.y}, width: ${comp.width}, height: ${comp.height} }}`
+        : `style={{ position: 'absolute', left: ${comp.x}, top: ${comp.y}, width: ${comp.width}, height: ${comp.height}, zIndex: ${comp.zIndex} }}`;
+
+      if (comp.type === 'card') { // Special handling for Card with its parts
+        return `<Card ${propsString} ${styleProps}>
+                    <CardHeader>
+                        <CardTitle>${comp.props.title || 'Card Title'}</CardTitle>
+                        ${comp.props.description ? `<CardDescription>${comp.props.description}</CardDescription>` : ''}
+                    </CardHeader>
+                    <CardContent>
+                        ${childrenString}
+                    </CardContent>
+                </Card>`;
+      }
       
-      // For ShadCN components, map to their actual names if different
-      const shadcnMap: Record<string, string> = {
-        'Button': 'Button', 'Input': 'Input', 'Card': 'Card', /* ... more ... */
-        'Checkbox': 'Checkbox', 'Switch': 'Switch', 'Placeholder': 'div'
-      };
-      componentName = shadcnMap[componentName] || componentName;
-
-
-      const styleProps = `style={{ position: 'absolute', left: ${comp.x}, top: ${comp.y}, width: ${comp.width}, height: ${comp.height}, zIndex: ${comp.parentId ? 'auto' : comp.zIndex} }}`;
-
-      if (comp.children && comp.children.length > 0) {
-         return `<${componentName} ${propsString} ${comp.parentId ? '' : styleProps}>\n${childrenString}\n</${componentName}>`;
+      if (childrenString) {
+        return `<${componentName} ${propsString} ${styleProps}>${childrenString}</${componentName}>`;
       }
-      if (childrenString) { // Text content
-        return `<${componentName} ${propsString} ${comp.parentId ? '' : styleProps}>${childrenString}</${componentName}>`;
-      }
-      return `<${componentName} ${propsString} ${comp.parentId ? '' : styleProps} />`;
+      return `<${componentName} ${propsString} ${styleProps} />`;
     };
     
-    const imports = new Set<string>();
-    components.forEach(comp => {
-      // Simplified import logic
-      if (['button', 'input', 'card', 'checkbox', 'switch'].includes(comp.type)){
-         imports.add(`import { ${comp.type.charAt(0).toUpperCase() + comp.type.slice(1)} } from '@/components/ui/${comp.type}';`)
-      }
-    });
-
-
-    const mainCode = components.filter(c => !c.parentId) // Only top-level components for initial rendering
+    const mainCode = components.filter(c => !c.parentId) 
       .sort((a,b) => a.zIndex - b.zIndex)
-      .map(comp => generateComponentCode(comp))
+      .map(comp => generateComponentCodeInternal(comp))
       .join('\n        ');
 
     return Promise.resolve(
-      `import React from 'react';\n${[...imports].join('\n')}\n\n` +
+      `${[...imports].join('\n')}\n\n` +
       `export default function MyDesign() {\n` +
+      `${stateDeclarations}` +
+      `${actionDeclarations}` +
       `  return (\n` +
-      `    <div style={{ position: 'relative', width: '${canvasSize.width}px', height: '${canvasSize.height}px', border: '1px solid #ccc', overflow: 'hidden' }}>\n` +
+      `    <div style={{ position: 'relative', width: '${canvasSize.width}px', height: '${canvasSize.height}px', border: '1px solid #ccc', overflow: 'hidden', background: 'hsl(var(--background))' }}>\n` +
       `      ${mainCode}\n` +
       `    </div>\n` +
       `  );\n` +
@@ -276,9 +376,9 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     );
   };
   
-  const suggestProps = async (componentType: string, currentProps: Record<string, any>) => {
-    return Promise.resolve({});
-  };
+  // const suggestProps = async (componentType: string, currentProps: Record<string, any>) => {
+  //   return Promise.resolve({});
+  // };
 
   return (
     <DesignContext.Provider
@@ -295,7 +395,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         sendToBack,
         getDesignJSON,
         generateCode,
-        suggestProps,
+        // suggestProps,
         canvasSize,
         setCanvasSize,
       }}
@@ -312,6 +412,3 @@ export const useDesign = (): DesignContextType => {
   }
   return context;
 };
-
-
-    

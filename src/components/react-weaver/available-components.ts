@@ -49,7 +49,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
         defaultValue: 'default',
         label: 'Size'
       },
-      onClickAction: { type: 'select', label: 'onClick Action', defaultValue: '' }, // Changed type to 'select'
+      onClickAction: { type: 'select', label: 'onClick Action', defaultValue: '' },
     },
   },
   {
@@ -68,11 +68,24 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     id: 'text',
     name: 'Text Block',
     icon: IconText,
-    defaultProps: { children: 'Some sample text', className: 'text-base' },
+    defaultProps: { 
+      children: 'Some sample text', 
+      className: '', 
+      textAlign: 'left', 
+      fontWeight: 'normal', 
+      fontSize: 'text-base',
+      customTextColor: '',
+      customBackgroundColor: ''
+    },
     defaultSize: { width: 200, height: 30 },
     propTypes: {
       children: { type: 'string', defaultValue: 'Some sample text', label: 'Content' },
-      className: { type: 'string', defaultValue: 'text-base', label: 'Tailwind Classes (e.g. text-lg font-bold)'}
+      className: { type: 'string', defaultValue: '', label: 'Custom Tailwind Classes'},
+      textAlign: { type: 'select', options: ['left', 'center', 'right', 'justify'], defaultValue: 'left', label: 'Text Align'},
+      fontWeight: { type: 'select', options: ['normal', 'medium', 'semibold', 'bold'], defaultValue: 'normal', label: 'Font Weight'},
+      fontSize: { type: 'select', options: ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl', 'text-4xl'], defaultValue: 'text-base', label: 'Font Size'},
+      customTextColor: { type: 'string', defaultValue: '', label: 'Text Color (CSS)'},
+      customBackgroundColor: { type: 'string', defaultValue: '', label: 'Background Color (CSS)'}
     },
   },
   {

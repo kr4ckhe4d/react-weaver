@@ -71,7 +71,18 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
       const { valueSource: _valueSourceInput, ...inputRenderProps } = commonProps;
       return <Input {...inputRenderProps} className={cn("w-full h-full", props.className)} />;
     case 'text':
-      return <p {...commonProps} className={cn("p-1 select-none", props.className)}>{props.children || 'Text Block'}</p>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { textAlign, fontWeight, fontSize, customTextColor, customBackgroundColor, className: userClassName, ...textRenderProps } = commonProps;
+      const style: React.CSSProperties = {};
+      if (customTextColor) style.color = customTextColor;
+      if (customBackgroundColor) style.backgroundColor = customBackgroundColor;
+
+      const textClasses: string[] = [];
+      if (textAlign) textClasses.push(`text-${textAlign}`);
+      if (fontWeight && fontWeight !== 'normal') textClasses.push(`font-${fontWeight}`);
+      if (fontSize) textClasses.push(fontSize);
+      
+      return <p {...textRenderProps} style={style} className={cn("p-1 select-none", ...textClasses, userClassName)}>{props.children || 'Text Block'}</p>;
     case 'card':
       return (
         <ShadCard {...commonProps} className={cn("w-full h-full overflow-hidden flex flex-col", props.className)}>

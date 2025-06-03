@@ -3,6 +3,7 @@
 import type { CanvasComponent } from '@/types';
 import { AVAILABLE_COMPONENTS, GRID_SIZE, getComponentConfig } from '@/components/react-weaver/available-components';
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
 // Define initial global states here
 const initialGlobalStatesConfig: Record<string, any> = {
@@ -27,7 +28,7 @@ interface DesignContextType {
   generateCode: () => Promise<string>;
   canvasSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
-  initialGlobalStates: Record<string, any>; // Added for global states
+  initialGlobalStates: Record<string, any>; 
 }
 
 const DesignContext = createContext<DesignContextType | undefined>(undefined);
@@ -180,7 +181,15 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       let targetZIndex = 1;
       if (minZIndexAmongOthers !== Infinity && minZIndexAmongOthers > 1) {
         targetZIndex = minZIndexAmongOthers -1;
+      } else if (minZIndexAmongOthers === 1) {
+         // If the minimum z-index of OTHERS is already 1, we need to shift all others up
+         return prev.map(c => {
+            if (c.id === id) return { ...c, zIndex: 1 };
+            if (!c.parentId) return { ...c, zIndex: c.zIndex + 1 }; // Shift others up
+            return c;
+         });
       }
+
 
       return prev.map(c => {
         if (c.id === id) {
@@ -204,6 +213,8 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const generateCode = async () => {
     const imports = new Set<string>();
     imports.add("import React, { useState, useEffect } from 'react';");
+    imports.add("import { cn } from '@/lib/utils';");
+
 
     const allComponentsFlat: CanvasComponent[] = [];
     function flattenComponents(comps: CanvasComponent[], parent?: CanvasComponent) {
@@ -217,9 +228,8 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     flattenComponents(components);
 
     const localActions = new Set<string>();
-    const importedActions = new Map<string, Set<string>>(); // moduleName -> Set<functionName>
+    const importedActions = new Map<string, Set<string>>(); 
     
-    // Initialize states from initialGlobalStatesConfig first
     const states = new Map<string, { initialValue: any, setterName: string }>();
     Object.entries(initialGlobalStatesConfig).forEach(([key, value]) => {
       states.set(key, {
@@ -269,12 +279,12 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           localActions.add(actionStr);
         }
       }
-      // Add other valueSource-driven states if not already in initialGlobalStatesConfig
+      
       if (comp.props.valueSource && comp.props.valueSource.trim() !== '') {
         const stateName = comp.props.valueSource.trim();
-        if (!states.has(stateName)) { // Only add if not already globally defined
+        if (!states.has(stateName)) { 
           let initialVal: any = null;
-          const currentCompConfig = getComponentConfig(comp.type); // Renamed to avoid conflict
+          const currentCompConfig = getComponentConfig(comp.type); 
           
           if (comp.type === 'progress') initialVal = comp.props.value !== undefined ? comp.props.value : (currentCompConfig?.propTypes.value?.defaultValue ?? 0);
           else if (comp.type === 'input' || comp.type === 'textarea') initialVal = comp.props.value !== undefined ? comp.props.value : (currentCompConfig?.propTypes.value?.defaultValue ?? '');
@@ -315,12 +325,32 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       const tempProps = { ...comp.props };
       const propsToProcess: Record<string, string> = {};
+      let styleObject: Record<string, any> = {};
+      const classList: string[] = [];
+
+      if (comp.type === 'text') {
+        if (tempProps.customTextColor) styleObject.color = tempProps.customTextColor;
+        if (tempProps.customBackgroundColor) styleObject.backgroundColor = tempProps.customBackgroundColor;
+        if (tempProps.textAlign) classList.push(`text-${tempProps.textAlign}`);
+        if (tempProps.fontWeight && tempProps.fontWeight !== 'normal') classList.push(`font-${tempProps.fontWeight}`);
+        if (tempProps.fontSize) classList.push(tempProps.fontSize);
+        
+        // Remove these from tempProps so they don't get stringified
+        delete tempProps.customTextColor;
+        delete tempProps.customBackgroundColor;
+        delete tempProps.textAlign;
+        delete tempProps.fontWeight;
+        delete tempProps.fontSize;
+      }
+
 
       if (comp.type === 'button' && tempProps.onClickAction && tempProps.onClickAction.trim() !== '') {
         const actionStr = tempProps.onClickAction.trim();
+        const allSetterNames = [...states.values()].map(s => s.setterName);
+        const settersObjectString = `{ ${allSetterNames.join(', ')} }`;
         if (actionStr.includes('/')) {
           const [, funcName] = actionStr.split('/');
-          propsToProcess.onClick = `{() => ${funcName}({ ${[...states.values()].map(s => s.setterName).join(', ')} })}`;
+          propsToProcess.onClick = `{() => ${funcName}(${settersObjectString})}`;
         } else {
           propsToProcess.onClick = `{${actionStr}}`;
         }
@@ -340,11 +370,10 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         } else if (comp.type === 'progress') {
             propsToProcess.value = `{${stateName}}`;
         } else if (comp.type === 'label') {
-            // Children for label handled below
+           // Children for label with valueSource handled below
         }
         delete tempProps.valueSource;
-        // Delete the original prop that valueSource replaces
-        if (comp.type !== 'label') delete tempProps.value; // for input, textarea, progress
+        if (comp.type !== 'label') delete tempProps.value; 
         if (comp.type === 'checkbox' || comp.type === 'switch') delete tempProps.checked;
       }
 
@@ -354,14 +383,28 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
         if (key === 'children' && typeof value === 'string' && !comp.children?.length && !componentConfig.isContainer) {
           // Handled by childrenString logic
-        } else if (typeof value === 'string') {
+        } else if (key === 'className' && typeof value === 'string') {
+            if (value.trim()) classList.push(value.trim()); // Add user's custom classes
+        }
+         else if (typeof value === 'string') {
           propsToProcess[key] = `"${value.replace(/"/g, '\\"')}"`;
         } else if (typeof value === 'boolean' || typeof value === 'number') {
           propsToProcess[key] = `{${value}}`;
-        } else if (key !== 'children') { // Avoid double-stringifying children objects if they are complex
+        } else if (key !== 'children') { 
           propsToProcess[key] = `{${JSON.stringify(value)}}`;
         }
       });
+      
+      if (classList.length > 0) {
+        propsToProcess.className = `{cn(${classList.map(c => `'${c}'`).join(', ')})}`;
+      } else if (tempProps.className === '' && comp.type === 'text') {
+         // if text component has no specific className and no style classes, remove empty className=""
+         delete propsToProcess.className;
+      }
+
+
+      const stylePropString = Object.keys(styleObject).length > 0 ? `style={${JSON.stringify(styleObject)}}` : '';
+
 
       const propsString = Object.entries(propsToProcess)
         .map(([key, value]) => `${key}=${value}`)
@@ -384,12 +427,18 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       else if (comp.type === 'image') componentName = 'img';
       else if (comp.type === 'placeholder') componentName = 'div';
 
-      const styleProps = comp.parentId
+      const layoutStyleProps = comp.parentId
         ? `style={{ position: 'absolute', left: ${comp.x}, top: ${comp.y}, width: ${comp.width}, height: ${comp.height} }}`
         : `style={{ position: 'absolute', left: ${comp.x}, top: ${comp.y}, width: ${comp.width}, height: ${comp.height}, zIndex: ${comp.zIndex} }}`;
+      
+      let finalPropsString = propsString;
+      if (stylePropString && comp.type === 'text') { // Only apply generated style object to 'text' for now
+        finalPropsString = `${propsString} ${stylePropString}`;
+      }
+
 
       if (comp.type === 'card') {
-        return `<Card ${propsString} ${styleProps}>
+        return `<Card ${finalPropsString} ${layoutStyleProps}>
                     <CardHeader>
                         <CardTitle>${comp.props.title || 'Card Title'}</CardTitle>
                         ${comp.props.description ? `<CardDescription>${comp.props.description}</CardDescription>` : ''}
@@ -398,28 +447,27 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                 </Card>`;
       }
       
-      // Special handling for checkbox label
       if (comp.type === 'checkbox' && comp.props.label) {
-        return `<div className="flex items-center space-x-2" ${styleProps}>
-                  <${componentName} id="${comp.id}-chk" ${propsString} />
+        return `<div className="flex items-center space-x-2" ${layoutStyleProps}>
+                  <${componentName} id="${comp.id}-chk" ${finalPropsString} />
                   <label htmlFor="${comp.id}-chk" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                     ${comp.props.label}
                   </label>
                 </div>`;
       }
-      // Special handling for switch label
+      
       if (comp.type === 'switch' && comp.props.label) {
-         return `<div className="flex items-center space-x-2" ${styleProps}>
-                   <${componentName} id="${comp.id}-swt" ${propsString} />
+         return `<div className="flex items-center space-x-2" ${layoutStyleProps}>
+                   <${componentName} id="${comp.id}-swt" ${finalPropsString} />
                    <label htmlFor="${comp.id}-swt">${comp.props.label}</label>
                  </div>`;
       }
 
 
       if (childrenString) {
-        return `<${componentName} ${propsString} ${styleProps}>${childrenString}</${componentName}>`;
+        return `<${componentName} ${finalPropsString} ${layoutStyleProps}>${childrenString}</${componentName}>`;
       }
-      return `<${componentName} ${propsString} ${styleProps} />`;
+      return `<${componentName} ${finalPropsString} ${layoutStyleProps} />`;
     };
 
     const mainCode = components.filter(c => !c.parentId)
@@ -428,7 +476,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       .join('\n');
 
     return Promise.resolve(
-      `${[...imports].join('\n')}\n\n` +
+      `${[...imports].sort().join('\n')}\n\n` +
       `export default function MyDesignedComponent() {\n` +
       `${stateDeclarations}` +
       `${actionDeclarations}` +
@@ -458,7 +506,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         generateCode,
         canvasSize,
         setCanvasSize,
-        initialGlobalStates: initialGlobalStatesConfig, // Provide the config
+        initialGlobalStates: initialGlobalStatesConfig, 
       }}
     >
       {children}

@@ -73,7 +73,7 @@ const RenderPreviewComponentRecursive: React.FC<{
         case 'checkbox': liveValue = !!props.checked; break;
         case 'switch': liveValue = !!props.checked; break;
         case 'label': liveValue = props.children || ''; break;
-        case 'progress': liveValue = props.value !== undefined ? props.value : 0; break; // Added for progress
+        case 'progress': liveValue = props.value !== undefined ? props.value : 0; break; 
     }
   }
 
@@ -136,7 +136,18 @@ const RenderPreviewComponentRecursive: React.FC<{
                 onChange={(e) => inputSetter ? inputSetter(e.target.value) : setLocalInputValue(e.target.value)}
                 className={cn("w-full h-full", props.className)} style={childStyle} />;
     case 'text':
-      return <p {...commonProps} className={cn("p-1", props.className)} style={childStyle}>{props.children || 'Text Block'}</p>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { textAlign, fontWeight, fontSize, customTextColor, customBackgroundColor, className: userClassNameText, ...textPreviewProps } = commonProps;
+      const textStyle: React.CSSProperties = { ...childStyle };
+      if (customTextColor) textStyle.color = customTextColor;
+      if (customBackgroundColor) textStyle.backgroundColor = customBackgroundColor;
+
+      const textClasses: string[] = ["p-1"];
+      if (textAlign) textClasses.push(`text-${textAlign}`);
+      if (fontWeight && fontWeight !== 'normal') textClasses.push(`font-${fontWeight}`);
+      if (fontSize) textClasses.push(fontSize);
+
+      return <p {...textPreviewProps} style={textStyle} className={cn(...textClasses, userClassNameText)}>{props.children || 'Text Block'}</p>;
     case 'card':
       return (
         <ShadCard {...commonProps} className={cn("w-full h-full overflow-hidden flex flex-col", props.className)} style={childStyle}>
@@ -215,15 +226,15 @@ const RenderPreviewComponentRecursive: React.FC<{
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valueSource: _valueSourceIgnoredLabel, ...labelPreviewProps } = commonProps;
       const labelText = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
-                        ? String(liveValue) // Use liveValue which is already derived from valueSourceStates
+                        ? String(liveValue) 
                         : (props.children || 'Label');
       return <Label className={cn("p-1", props.className)} style={childStyle} {...labelPreviewProps}>{labelText}</Label>;
     case 'progress':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valueSource: _valueSourceIgnoredProgress, value: _staticValueIgnored, ...progressPreviewProps } = commonProps;
       const currentProgressValue = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
-                                   ? liveValue // Use liveValue
-                                   : props.value; // Fallback to static prop if no valueSource
+                                   ? liveValue 
+                                   : props.value; 
       return <Progress value={Number(currentProgressValue) || 0} className={cn("w-full", props.className)} style={childStyle} {...progressPreviewProps} />;
     case 'radioGroup':
       return (
@@ -343,14 +354,13 @@ const DesignPreviewRenderer: React.FC = () => {
     let updateNeeded = false;
 
     uniqueValueSources.forEach(sourceName => {
-        if (!valueSourceStates.hasOwnProperty(sourceName)) { // Only initialize if not already present in live state
+        if (!valueSourceStates.hasOwnProperty(sourceName)) { 
             updateNeeded = true;
             let valueToSet: any = null;
 
             if (initialGlobalStates.hasOwnProperty(sourceName)) {
                 valueToSet = initialGlobalStates[sourceName];
             } else {
-                // This sourceName must have come from a component on the canvas. Find it to get its initial value.
                 const compDef = findCompBySource(designComponents, sourceName); 
                 if (compDef) {
                     const compConfig = getComponentConfig(compDef.type);
@@ -359,15 +369,14 @@ const DesignPreviewRenderer: React.FC = () => {
                     else if (compDef.type === 'input' || compDef.type === 'textarea') { valueToSet = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? '');}
                     else if (compDef.type === 'checkbox' || compDef.type === 'switch') { valueToSet = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);}
                     else if (compDef.type === 'label') { valueToSet = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');}
-                    // Fallback for other potential value-holding components if not covered above
                     else if (props.value !== undefined) valueToSet = props.value;
                     else if (props.checked !== undefined) valueToSet = props.checked;
                     else if (compConfig?.propTypes.value?.defaultValue !== undefined) valueToSet = compConfig.propTypes.value.defaultValue;
                     else if (compConfig?.propTypes.checked?.defaultValue !== undefined) valueToSet = compConfig.propTypes.checked.defaultValue;
                     else if (compConfig?.propTypes.children?.defaultValue !== undefined) valueToSet = String(compConfig.propTypes.children.defaultValue);
-                    else valueToSet = null; // Final fallback if no default found
+                    else valueToSet = null; 
                 } else {
-                    valueToSet = null; // Fallback if no component defines this sourceName (should not happen if not in global)
+                    valueToSet = null; 
                 }
             }
             newInitialStates[sourceName] = valueToSet;

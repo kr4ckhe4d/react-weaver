@@ -1,8 +1,9 @@
 
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDesign } from '@/contexts/design-context';
 import { getComponentConfig, AvailableComponent, PropDefinition } from './available-components';
+import type { CanvasComponent } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
@@ -19,22 +20,78 @@ import * as exampleActionsModule from '@/app-logic/exampleActions';
 const NONE_ACTION_VALUE = "_SELECT_NONE_"; // Special value for "None / Manual"
 
 const PropEditorPanel: React.FC = () => {
-  const { selectedComponentId, components, updateComponentProps, deleteComponent, bringToFront, sendToBack } = useDesign();
+  const { 
+    selectedComponentId, 
+    components, // Renamed from designComponents for clarity if used directly
+    updateComponentProps, 
+    deleteComponent, 
+    bringToFront, 
+    sendToBack 
+  } = useDesign();
+  
   const selectedComponent = components.find(comp => comp.id === selectedComponentId);
   const componentConfig = selectedComponent ? getComponentConfig(selectedComponent.type) : null;
 
+  const uniqueValueSources = useMemo(() => {
+    const sources = new Set<string>();
+    function collectSourcesRecursive(componentList: CanvasComponent[]) {
+        componentList.forEach(c => {
+            if (c.props.valueSource && typeof c.props.valueSource === 'string' && c.props.valueSource.trim() !== '') {
+                sources.add(c.props.valueSource.trim());
+            }
+            if (c.children) {
+                collectSourcesRecursive(c.children);
+            }
+        });
+    }
+    collectSourcesRecursive(components); // Use 'components' from useDesign context
+    return Array.from(sources).sort();
+  }, [components]);
+
+
   const handleInputChange = (propName: string, value: any) => {
     if (!selectedComponentId) return;
-    // If the special "none" value is received for onClickAction, store it as an empty string
-    if (propName === 'onClickAction' && value === NONE_ACTION_VALUE) {
-      updateComponentProps(selectedComponentId, { [propName]: '' });
-    } else {
-      updateComponentProps(selectedComponentId, { [propName]: value });
+    
+    let finalValue = value;
+    if ((propName === 'onClickAction' || propName === 'valueSource') && value === NONE_ACTION_VALUE) {
+      finalValue = '';
     }
+    updateComponentProps(selectedComponentId, { [propName]: finalValue });
   };
 
   const renderPropField = (propName: string, propDef: PropDefinition, currentValue: any) => {
     const key = `${selectedComponentId}-${propName}`;
+
+    if (propName === 'valueSource') {
+      const finalOptions = [NONE_ACTION_VALUE, ...uniqueValueSources];
+      let displayValue = currentValue ?? '';
+      if (displayValue === '') {
+        displayValue = NONE_ACTION_VALUE;
+      } else if (!finalOptions.includes(displayValue)) {
+        // If current value is manually typed and not in options, add it so Select can display it
+        finalOptions.push(displayValue);
+      }
+
+
+      return (
+        <Select
+          value={displayValue}
+          onValueChange={(value) => handleInputChange(propName, value)}
+        >
+          <SelectTrigger id={key} className="mt-1">
+            <SelectValue placeholder="Select state or type new" />
+          </SelectTrigger>
+          <SelectContent>
+            {finalOptions.map(option => (
+              <SelectItem key={option} value={option}>
+                {option === NONE_ACTION_VALUE ? 'None / Manual' : option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+
     switch (propDef.type) {
       case 'string':
       case 'color':
@@ -58,7 +115,7 @@ const PropEditorPanel: React.FC = () => {
             />
           </div>
         );
-      case 'select':
+      case 'select': // This case handles onClickAction and other predefined selects
         let finalOptions: string[] = propDef.options || [];
         let displayValue = currentValue ?? propDef.defaultValue ?? '';
 
@@ -69,6 +126,9 @@ const PropEditorPanel: React.FC = () => {
           finalOptions = [NONE_ACTION_VALUE, ...exampleModuleOptions];
           if (displayValue === '') {
             displayValue = NONE_ACTION_VALUE;
+          } else if (!finalOptions.includes(displayValue)) {
+            // If current value is manually typed and not in options, add it so Select can display it
+            finalOptions.push(displayValue);
           }
         }
         return (
@@ -99,6 +159,7 @@ const PropEditorPanel: React.FC = () => {
                 const parsed = JSON.parse(e.target.value);
                 handleInputChange(propName, parsed);
               } catch (err) {
+                // If parsing fails, treat it as a string - useful for partially typed JSON
                 handleInputChange(propName, e.target.value);
               }
             }}
@@ -162,3 +223,4 @@ const PropEditorPanel: React.FC = () => {
 };
 
 export default PropEditorPanel;
+

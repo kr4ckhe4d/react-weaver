@@ -22,7 +22,7 @@ const NONE_ACTION_VALUE = "_SELECT_NONE_"; // Special value for "None / Manual"
 const PropEditorPanel: React.FC = () => {
   const { 
     selectedComponentId, 
-    components, // Renamed from designComponents for clarity if used directly
+    components, 
     updateComponentProps, 
     deleteComponent, 
     bringToFront, 
@@ -44,7 +44,7 @@ const PropEditorPanel: React.FC = () => {
             }
         });
     }
-    collectSourcesRecursive(components); // Use 'components' from useDesign context
+    collectSourcesRecursive(components);
     return Array.from(sources).sort();
   }, [components]);
 
@@ -63,32 +63,41 @@ const PropEditorPanel: React.FC = () => {
     const key = `${selectedComponentId}-${propName}`;
 
     if (propName === 'valueSource') {
-      const finalOptions = [NONE_ACTION_VALUE, ...uniqueValueSources];
-      let displayValue = currentValue ?? '';
-      if (displayValue === '') {
-        displayValue = NONE_ACTION_VALUE;
-      } else if (!finalOptions.includes(displayValue)) {
-        // If current value is manually typed and not in options, add it so Select can display it
-        finalOptions.push(displayValue);
+      const currentActualPropValue = currentValue ?? '';
+      const selectOptions = [NONE_ACTION_VALUE, ...uniqueValueSources];
+      
+      let valueForSelectComponent = NONE_ACTION_VALUE; 
+      if (currentActualPropValue && uniqueValueSources.includes(currentActualPropValue)) {
+        valueForSelectComponent = currentActualPropValue;
       }
 
-
       return (
-        <Select
-          value={displayValue}
-          onValueChange={(value) => handleInputChange(propName, value)}
-        >
-          <SelectTrigger id={key} className="mt-1">
-            <SelectValue placeholder="Select state or type new" />
-          </SelectTrigger>
-          <SelectContent>
-            {finalOptions.map(option => (
-              <SelectItem key={option} value={option}>
-                {option === NONE_ACTION_VALUE ? 'None / Manual' : option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="space-y-1 mt-1">
+          <Input
+            id={key}
+            type="text"
+            value={currentActualPropValue}
+            placeholder="Type state variable name"
+            onChange={(e) => handleInputChange(propName, e.target.value)}
+          />
+          <Select
+            value={valueForSelectComponent}
+            onValueChange={(selectedValue) => {
+              handleInputChange(propName, selectedValue === NONE_ACTION_VALUE ? '' : selectedValue);
+            }}
+          >
+            <SelectTrigger id={`${key}-selecthelper`} className="w-full text-xs">
+              <SelectValue placeholder="Or pick existing / clear" />
+            </SelectTrigger>
+            <SelectContent>
+              {selectOptions.map(option => (
+                <SelectItem key={option} value={option}>
+                  {option === NONE_ACTION_VALUE ? 'None (Clear)' : option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       );
     }
 
@@ -115,7 +124,7 @@ const PropEditorPanel: React.FC = () => {
             />
           </div>
         );
-      case 'select': // This case handles onClickAction and other predefined selects
+      case 'select': 
         let finalOptions: string[] = propDef.options || [];
         let displayValue = currentValue ?? propDef.defaultValue ?? '';
 
@@ -127,7 +136,6 @@ const PropEditorPanel: React.FC = () => {
           if (displayValue === '') {
             displayValue = NONE_ACTION_VALUE;
           } else if (!finalOptions.includes(displayValue)) {
-            // If current value is manually typed and not in options, add it so Select can display it
             finalOptions.push(displayValue);
           }
         }
@@ -159,7 +167,6 @@ const PropEditorPanel: React.FC = () => {
                 const parsed = JSON.parse(e.target.value);
                 handleInputChange(propName, parsed);
               } catch (err) {
-                // If parsing fails, treat it as a string - useful for partially typed JSON
                 handleInputChange(propName, e.target.value);
               }
             }}
@@ -223,4 +230,3 @@ const PropEditorPanel: React.FC = () => {
 };
 
 export default PropEditorPanel;
-

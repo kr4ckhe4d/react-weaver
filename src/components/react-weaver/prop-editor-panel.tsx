@@ -11,33 +11,27 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { IconLayers, IconTrash } from './icons'; // Removed IconSettings, IconPlusCircle
+import { IconLayers, IconTrash } from './icons';
 import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
+import * as exampleActionsModule from '@/app-logic/exampleActions';
 
 const PropEditorPanel: React.FC = () => {
   const { selectedComponentId, components, updateComponentProps, deleteComponent, bringToFront, sendToBack } = useDesign();
-  // Removed suggestProps, isLoadingAi from useDesign()
-  // Removed toast usage related to AI suggestions
-
   const selectedComponent = components.find(comp => comp.id === selectedComponentId);
   const componentConfig = selectedComponent ? getComponentConfig(selectedComponent.type) : null;
-
-  // Removed suggestedProps state and related useEffect
 
   const handleInputChange = (propName: string, value: any) => {
     if (!selectedComponentId) return;
     updateComponentProps(selectedComponentId, { [propName]: value });
   };
 
-  // Removed handleSuggestion and applySuggestedProp functions
-
   const renderPropField = (propName: string, propDef: PropDefinition, currentValue: any) => {
     const key = `${selectedComponentId}-${propName}`;
     switch (propDef.type) {
       case 'string':
-      case 'color': 
-      case 'number': 
+      case 'color':
+      case 'number':
         return (
           <Input
             id={key}
@@ -58,6 +52,13 @@ const PropEditorPanel: React.FC = () => {
           </div>
         );
       case 'select':
+        let finalOptions: string[] = propDef.options || [];
+        if (selectedComponent?.type === 'button' && propName === 'onClickAction') {
+          const exampleModuleOptions = Object.keys(exampleActionsModule)
+            .filter(moduleKey => typeof exampleActionsModule[moduleKey as keyof typeof exampleActionsModule] === 'function')
+            .map(funcName => `exampleActions/${funcName}`);
+          finalOptions = ['', ...exampleModuleOptions]; // Add "None" option and then example actions
+        }
         return (
           <Select
             value={currentValue ?? propDef.defaultValue ?? ''}
@@ -67,8 +68,10 @@ const PropEditorPanel: React.FC = () => {
               <SelectValue placeholder={`Select ${propDef.label || propName}`} />
             </SelectTrigger>
             <SelectContent>
-              {propDef.options?.map(option => (
-                <SelectItem key={option} value={option}>{option}</SelectItem>
+              {finalOptions.map(option => (
+                <SelectItem key={option} value={option}>
+                  {option === '' ? 'None / Manual' : option}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -84,7 +87,7 @@ const PropEditorPanel: React.FC = () => {
                 const parsed = JSON.parse(e.target.value);
                 handleInputChange(propName, parsed);
               } catch (err) {
-                handleInputChange(propName, e.target.value); 
+                handleInputChange(propName, e.target.value);
               }
             }}
             rows={3}
@@ -114,7 +117,7 @@ const PropEditorPanel: React.FC = () => {
       <CardHeader className="p-4 border-b border-panel-border">
         <div className="flex justify-between items-center">
           <CardTitle className="text-lg font-headline text-primary truncate" title={componentConfig.name}>{componentConfig.name} Properties</CardTitle>
-          <Button variant="ghost" size="icon" onClick={() => deleteComponent(selectedComponent.id)} title="Delete Component">
+          <Button variant="ghost" size="icon" onClick={() => deleteComponent(selectedComponent.id, selectedComponent.parentId)} title="Delete Component">
             <IconTrash className="h-4 w-4 text-destructive" />
           </Button>
         </div>
@@ -125,8 +128,8 @@ const PropEditorPanel: React.FC = () => {
           <div>
             <h4 className="font-medium text-sm mb-2">Arrangement</h4>
             <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => bringToFront(selectedComponent.id)}>Bring to Front</Button>
-                <Button variant="outline" size="sm" onClick={() => sendToBack(selectedComponent.id)}>Send to Back</Button>
+                <Button variant="outline" size="sm" onClick={() => bringToFront(selectedComponent.id)} disabled={!!selectedComponent.parentId}>Bring to Front</Button>
+                <Button variant="outline" size="sm" onClick={() => sendToBack(selectedComponent.id)} disabled={!!selectedComponent.parentId}>Send to Back</Button>
             </div>
             <Label htmlFor={`${selectedComponent.id}-zindex`} className="text-xs mt-2 block">Z-Index: {selectedComponent.zIndex}</Label>
           </div>
@@ -139,8 +142,7 @@ const PropEditorPanel: React.FC = () => {
               {renderPropField(propName, propDef, selectedComponent.props[propName])}
             </div>
           ))}
-          
-          {/* Removed AI Prop Suggestions section */}
+
         </CardContent>
       </ScrollArea>
     </Card>

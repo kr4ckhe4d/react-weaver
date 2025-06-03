@@ -33,7 +33,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
     id: 'button',
     name: 'Button',
     icon: IconButton,
-    defaultProps: { children: 'Button', variant: 'default', size: 'default' },
+    defaultProps: { children: 'Button', variant: 'default', size: 'default', onClickAction: '' },
     defaultSize: { width: 120, height: 40 },
     propTypes: {
       children: { type: 'string', defaultValue: 'Button', label: 'Text' },
@@ -49,7 +49,7 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
         defaultValue: 'default',
         label: 'Size'
       },
-      onClickAction: { type: 'string', label: 'onClick Action (e.g. logicFile/importedAction)', defaultValue: '' },
+      onClickAction: { type: 'select', label: 'onClick Action', defaultValue: '' }, // Changed type to 'select'
     },
   },
   {

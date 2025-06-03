@@ -17,7 +17,7 @@ import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import * as exampleActionsModule from '@/app-logic/exampleActions';
 
-const NONE_ACTION_VALUE = "_SELECT_NONE_"; // Special value for "None / Manual"
+const NONE_ACTION_VALUE = "_SELECT_NONE_"; 
 
 const PropEditorPanel: React.FC = () => {
   const { 
@@ -26,14 +26,15 @@ const PropEditorPanel: React.FC = () => {
     updateComponentProps, 
     deleteComponent, 
     bringToFront, 
-    sendToBack 
+    sendToBack,
+    initialGlobalStates // Get initial global states from context
   } = useDesign();
   
   const selectedComponent = components.find(comp => comp.id === selectedComponentId);
   const componentConfig = selectedComponent ? getComponentConfig(selectedComponent.type) : null;
 
   const uniqueValueSources = useMemo(() => {
-    const sources = new Set<string>();
+    const sources = new Set<string>(Object.keys(initialGlobalStates)); // Start with keys from initialGlobalStates
     function collectSourcesRecursive(componentList: CanvasComponent[]) {
         componentList.forEach(c => {
             if (c.props.valueSource && typeof c.props.valueSource === 'string' && c.props.valueSource.trim() !== '') {
@@ -44,9 +45,9 @@ const PropEditorPanel: React.FC = () => {
             }
         });
     }
-    collectSourcesRecursive(components);
+    collectSourcesRecursive(components); // Add sources from components on the canvas
     return Array.from(sources).sort();
-  }, [components]);
+  }, [components, initialGlobalStates]);
 
 
   const handleInputChange = (propName: string, value: any) => {
@@ -64,7 +65,8 @@ const PropEditorPanel: React.FC = () => {
 
     if (propName === 'valueSource') {
       const currentActualPropValue = currentValue ?? '';
-      const selectOptions = [NONE_ACTION_VALUE, ...uniqueValueSources];
+      // NONE_ACTION_VALUE is reused here for "None (Clear)"
+      const selectOptions = [NONE_ACTION_VALUE, ...uniqueValueSources]; 
       
       let valueForSelectComponent = NONE_ACTION_VALUE; 
       if (currentActualPropValue && uniqueValueSources.includes(currentActualPropValue)) {
@@ -79,6 +81,7 @@ const PropEditorPanel: React.FC = () => {
             value={currentActualPropValue}
             placeholder="Type state variable name"
             onChange={(e) => handleInputChange(propName, e.target.value)}
+            className="mb-1" // Add some margin for the select below
           />
           <Select
             value={valueForSelectComponent}
@@ -136,8 +139,21 @@ const PropEditorPanel: React.FC = () => {
           if (displayValue === '') {
             displayValue = NONE_ACTION_VALUE;
           } else if (!finalOptions.includes(displayValue)) {
-            finalOptions.push(displayValue);
+            // If current value is manually typed and not in options, add it to show it's selected
+            // This could happen if a user types an action not in exampleActions
+             if (displayValue !== NONE_ACTION_VALUE) finalOptions.push(displayValue);
           }
+        } else {
+           // For general select, if current value is empty string, map to NONE_ACTION_VALUE for display
+           if (displayValue === '') displayValue = NONE_ACTION_VALUE;
+           // Ensure current value is an option if it's not the "none" value
+           if (displayValue !== NONE_ACTION_VALUE && !finalOptions.includes(displayValue)){
+             finalOptions.push(displayValue);
+           }
+           // Ensure "None / Manual" is an option for general selects too
+           if(!finalOptions.includes(NONE_ACTION_VALUE)) {
+             finalOptions = [NONE_ACTION_VALUE, ...finalOptions];
+           }
         }
         return (
           <Select
@@ -167,6 +183,7 @@ const PropEditorPanel: React.FC = () => {
                 const parsed = JSON.parse(e.target.value);
                 handleInputChange(propName, parsed);
               } catch (err) {
+                // If JSON is invalid, store as string, user can fix
                 handleInputChange(propName, e.target.value);
               }
             }}
@@ -230,3 +247,4 @@ const PropEditorPanel: React.FC = () => {
 };
 
 export default PropEditorPanel;
+

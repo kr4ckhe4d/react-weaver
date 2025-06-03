@@ -4,6 +4,14 @@ import type { CanvasComponent } from '@/types';
 import { AVAILABLE_COMPONENTS, GRID_SIZE, getComponentConfig } from '@/components/react-weaver/available-components';
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 
+// Define initial global states here
+const initialGlobalStatesConfig: Record<string, any> = {
+  myProgress: 10,
+  appTitle: "React Weaver App",
+  isLoading: false,
+};
+
+
 interface DesignContextType {
   components: CanvasComponent[];
   selectedComponentId: string | null;
@@ -19,6 +27,7 @@ interface DesignContextType {
   generateCode: () => Promise<string>;
   canvasSize: { width: number; height: number };
   setCanvasSize: (size: { width: number; height: number }) => void;
+  initialGlobalStates: Record<string, any>; // Added for global states
 }
 
 const DesignContext = createContext<DesignContextType | undefined>(undefined);
@@ -189,7 +198,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         children: children ? toSerializable(children) : undefined
       }));
     };
-    return JSON.stringify({ components: toSerializable(components), canvas: { width: canvasSize.width, height: canvasSize.height } }, null, 2);
+    return JSON.stringify({ components: toSerializable(components), canvas: { width: canvasSize.width, height: canvasSize.height }, initialGlobalStates: initialGlobalStatesConfig }, null, 2);
   }, [components, canvasSize]);
 
   const generateCode = async () => {
@@ -209,7 +218,16 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     const localActions = new Set<string>();
     const importedActions = new Map<string, Set<string>>(); // moduleName -> Set<functionName>
+    
+    // Initialize states from initialGlobalStatesConfig first
     const states = new Map<string, { initialValue: any, setterName: string }>();
+    Object.entries(initialGlobalStatesConfig).forEach(([key, value]) => {
+      states.set(key, {
+        initialValue: value,
+        setterName: `set${key.charAt(0).toUpperCase() + key.slice(1)}`
+      });
+    });
+
 
     allComponentsFlat.forEach(comp => {
       const componentConfig = getComponentConfig(comp.type);
@@ -251,13 +269,18 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           localActions.add(actionStr);
         }
       }
-      if (comp.type === 'progress' && comp.props.valueSource && comp.props.valueSource.trim() !== '') {
+      // Add other valueSource-driven states if not already in initialGlobalStatesConfig
+      if (comp.props.valueSource && comp.props.valueSource.trim() !== '') {
         const stateName = comp.props.valueSource.trim();
-        if (!states.has(stateName)) {
-          const progressConfig = getComponentConfig('progress');
-          const initialVal = comp.props.value !== undefined
-                             ? comp.props.value
-                             : progressConfig?.propTypes.value.defaultValue ?? 0;
+        if (!states.has(stateName)) { // Only add if not already globally defined
+          let initialVal: any = null;
+          const currentCompConfig = getComponentConfig(comp.type); // Renamed to avoid conflict
+          
+          if (comp.type === 'progress') initialVal = comp.props.value !== undefined ? comp.props.value : (currentCompConfig?.propTypes.value?.defaultValue ?? 0);
+          else if (comp.type === 'input' || comp.type === 'textarea') initialVal = comp.props.value !== undefined ? comp.props.value : (currentCompConfig?.propTypes.value?.defaultValue ?? '');
+          else if (comp.type === 'checkbox' || comp.type === 'switch') initialVal = comp.props.checked !== undefined ? comp.props.checked : (currentCompConfig?.propTypes.checked?.defaultValue ?? false);
+          else if (comp.type === 'label') initialVal = comp.props.children !== undefined ? String(comp.props.children) : (currentCompConfig?.propTypes.children?.defaultValue ?? '');
+          
           states.set(stateName, {
             initialValue: initialVal,
             setterName: `set${stateName.charAt(0).toUpperCase() + stateName.slice(1)}`
@@ -297,29 +320,45 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const actionStr = tempProps.onClickAction.trim();
         if (actionStr.includes('/')) {
           const [, funcName] = actionStr.split('/');
-          propsToProcess.onClick = `{${funcName}}`;
+          propsToProcess.onClick = `{() => ${funcName}({ ${[...states.values()].map(s => s.setterName).join(', ')} })}`;
         } else {
           propsToProcess.onClick = `{${actionStr}}`;
         }
         delete tempProps.onClickAction;
       }
 
-      if (comp.type === 'progress' && tempProps.valueSource && tempProps.valueSource.trim() !== '') {
-        propsToProcess.value = `{${tempProps.valueSource.trim()}}`;
+      if (tempProps.valueSource && tempProps.valueSource.trim() !== '') {
+        const stateName = tempProps.valueSource.trim();
+        if (comp.type === 'input' || comp.type === 'textarea') {
+            propsToProcess.value = `{${stateName}}`;
+            const setterName = states.get(stateName)?.setterName;
+            if (setterName) propsToProcess.onChange = `{(e) => ${setterName}(e.target.value)}`;
+        } else if (comp.type === 'checkbox' || comp.type === 'switch') {
+            propsToProcess.checked = `{${stateName}}`;
+            const setterName = states.get(stateName)?.setterName;
+            if (setterName) propsToProcess.onCheckedChange = `{(checked) => ${setterName}(Boolean(checked))}`;
+        } else if (comp.type === 'progress') {
+            propsToProcess.value = `{${stateName}}`;
+        } else if (comp.type === 'label') {
+            // Children for label handled below
+        }
         delete tempProps.valueSource;
-        delete tempProps.value;
+        // Delete the original prop that valueSource replaces
+        if (comp.type !== 'label') delete tempProps.value; // for input, textarea, progress
+        if (comp.type === 'checkbox' || comp.type === 'switch') delete tempProps.checked;
       }
 
+
       Object.entries(tempProps).forEach(([key, value]) => {
-        if (propsToProcess[key]) return; // Already handled (e.g. onClick, value for progress)
+        if (propsToProcess[key]) return; 
 
         if (key === 'children' && typeof value === 'string' && !comp.children?.length && !componentConfig.isContainer) {
           // Handled by childrenString logic
         } else if (typeof value === 'string') {
-          propsToProcess[key] = `"${value.replace(/"/g, '\\"')}"`; // Escape quotes in string props
+          propsToProcess[key] = `"${value.replace(/"/g, '\\"')}"`;
         } else if (typeof value === 'boolean' || typeof value === 'number') {
           propsToProcess[key] = `{${value}}`;
-        } else if (key !== 'children') {
+        } else if (key !== 'children') { // Avoid double-stringifying children objects if they are complex
           propsToProcess[key] = `{${JSON.stringify(value)}}`;
         }
       });
@@ -329,13 +368,16 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         .join(' ');
 
       let childrenString = '';
-      if (comp.children && comp.children.length > 0) {
+       if (comp.type === 'label' && comp.props.valueSource && states.has(comp.props.valueSource)) {
+        childrenString = `{${comp.props.valueSource}}`;
+      } else if (comp.children && comp.children.length > 0) {
         childrenString = `\n${comp.children.map(child => generateComponentCodeInternal(child)).join('\n')}\n          `;
       } else if (comp.props.children && typeof comp.props.children === 'string' && !componentConfig.isContainer) {
         childrenString = comp.props.children;
       } else if (componentConfig.isContainer && comp.props.content && typeof comp.props.content === 'string') {
         childrenString = comp.props.content;
       }
+
 
       let componentName = comp.type.charAt(0).toUpperCase() + comp.type.slice(1);
       if (comp.type === 'text') componentName = 'p';
@@ -355,6 +397,24 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
                     <CardContent>${childrenString}</CardContent>
                 </Card>`;
       }
+      
+      // Special handling for checkbox label
+      if (comp.type === 'checkbox' && comp.props.label) {
+        return `<div className="flex items-center space-x-2" ${styleProps}>
+                  <${componentName} id="${comp.id}-chk" ${propsString} />
+                  <label htmlFor="${comp.id}-chk" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    ${comp.props.label}
+                  </label>
+                </div>`;
+      }
+      // Special handling for switch label
+      if (comp.type === 'switch' && comp.props.label) {
+         return `<div className="flex items-center space-x-2" ${styleProps}>
+                   <${componentName} id="${comp.id}-swt" ${propsString} />
+                   <label htmlFor="${comp.id}-swt">${comp.props.label}</label>
+                 </div>`;
+      }
+
 
       if (childrenString) {
         return `<${componentName} ${propsString} ${styleProps}>${childrenString}</${componentName}>`;
@@ -363,7 +423,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     };
 
     const mainCode = components.filter(c => !c.parentId)
-      .sort((a,b) => a.zIndex - b.zIndex)
+      .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
       .map(comp => `        ${generateComponentCodeInternal(comp)}`)
       .join('\n');
 
@@ -398,6 +458,7 @@ export const DesignProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         generateCode,
         canvasSize,
         setCanvasSize,
+        initialGlobalStates: initialGlobalStatesConfig, // Provide the config
       }}
     >
       {children}
@@ -412,3 +473,4 @@ export const useDesign = (): DesignContextType => {
   }
   return context;
 };
+

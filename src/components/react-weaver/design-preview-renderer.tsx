@@ -33,6 +33,17 @@ const appLogicModules: Record<string, Record<string, (...args: any[]) => any>> =
   exampleActions: exampleActionsModule,
 };
 
+const findCompBySource = (comps: CanvasComponent[], sourceName: string): CanvasComponent | undefined => {
+    for (const comp of comps) {
+        if (comp.props.valueSource === sourceName) return comp;
+        if (comp.children) {
+            const foundInChildren = findCompBySource(comp.children, sourceName);
+            if (foundInChildren) return foundInChildren;
+        }
+    }
+    return undefined;
+};
+
 
 const RenderPreviewComponentRecursive: React.FC<{
   component: CanvasComponent,
@@ -55,12 +66,14 @@ const RenderPreviewComponentRecursive: React.FC<{
   if (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource)) {
     liveValue = valueSourceStates[props.valueSource];
   } else {
+    // If not controlled by valueSource, use component's own prop for initial display
     switch (type) {
         case 'input': liveValue = props.value || ''; break;
         case 'textarea': liveValue = props.value || ''; break;
         case 'checkbox': liveValue = !!props.checked; break;
         case 'switch': liveValue = !!props.checked; break;
         case 'label': liveValue = props.children || ''; break;
+        case 'progress': liveValue = props.value !== undefined ? props.value : 0; break; // Added for progress
     }
   }
 
@@ -83,24 +96,18 @@ const RenderPreviewComponentRecursive: React.FC<{
       const [moduleName, funcName] = actionString.split('/');
       if (appLogicModules[moduleName] && typeof appLogicModules[moduleName][funcName] === 'function') {
         try {
-          console.log(`Preview: Calling ${moduleName}/${funcName} with setters:`, allSetters);
           const actionFn = appLogicModules[moduleName][funcName];
-          // Example of how one might pass specific arguments if needed.
-          // For now, `setSpecificProgressValue` is an example that takes two.
-          // Other actions are assumed to take `setters` or `setters, arg2, ...`.
           if (actionFn === exampleActionsModule.setSpecificProgressValue) {
-            // For demonstration, if it's this specific function, we pass a hardcoded target value.
-            // In a real scenario, the editor would need a way to define these extra args.
-            await actionFn(allSetters, 70); // Hardcoded targetValue for this example
+            await actionFn(allSetters, 70); 
           } else {
-            await actionFn(allSetters); // Pass all available setters
+            await actionFn(allSetters); 
           }
         } catch (error) {
           console.error(`Error executing action ${moduleName}/${funcName}:`, error);
           alert(`Error in action ${moduleName}/${funcName}: ${error instanceof Error ? error.message : String(error)}`);
         }
       } else {
-        console.warn(`Preview: Action module '${moduleName}' or function '${funcName}' not found. Loaded modules:`, Object.keys(appLogicModules), appLogicModules);
+        console.warn(`Preview: Action module '${moduleName}' or function '${funcName}' not found.`);
         alert(`Action '${actionString}' not found. Make sure it's exported from src/app-logic/${moduleName}.ts and that the file is loaded.`);
       }
     } else {
@@ -208,15 +215,15 @@ const RenderPreviewComponentRecursive: React.FC<{
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valueSource: _valueSourceIgnoredLabel, ...labelPreviewProps } = commonProps;
       const labelText = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
-                        ? String(valueSourceStates[props.valueSource])
+                        ? String(liveValue) // Use liveValue which is already derived from valueSourceStates
                         : (props.children || 'Label');
       return <Label className={cn("p-1", props.className)} style={childStyle} {...labelPreviewProps}>{labelText}</Label>;
     case 'progress':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { valueSource: _valueSourceIgnoredProgress, value: _staticValueIgnored, ...progressPreviewProps } = commonProps;
       const currentProgressValue = (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource))
-                                   ? valueSourceStates[props.valueSource]
-                                   : props.value;
+                                   ? liveValue // Use liveValue
+                                   : props.value; // Fallback to static prop if no valueSource
       return <Progress value={Number(currentProgressValue) || 0} className={cn("w-full", props.className)} style={childStyle} {...progressPreviewProps} />;
     case 'radioGroup':
       return (
@@ -312,15 +319,15 @@ const RenderPreviewComponentRecursive: React.FC<{
 };
 
 const DesignPreviewRenderer: React.FC = () => {
-  const { components: designComponents, canvasSize } = useDesign();
+  const { components: designComponents, canvasSize, initialGlobalStates } = useDesign();
   const [valueSourceStates, setValueSourceStates] = useState<Record<string, any>>({});
 
   const uniqueValueSources = useMemo(() => {
-    const sources = new Set<string>();
+    const sources = new Set<string>(Object.keys(initialGlobalStates));
     function collectValueSourcesRecursive(comps: CanvasComponent[]) {
       comps.forEach(comp => {
-        if (comp.props.valueSource) {
-          sources.add(comp.props.valueSource);
+        if (comp.props.valueSource && typeof comp.props.valueSource === 'string' && comp.props.valueSource.trim() !== '') {
+          sources.add(comp.props.valueSource.trim());
         }
         if (comp.children) {
           collectValueSourcesRecursive(comp.children);
@@ -328,65 +335,50 @@ const DesignPreviewRenderer: React.FC = () => {
       });
     }
     collectValueSourcesRecursive(designComponents);
-    return Array.from(sources);
-  }, [designComponents]); 
+    return Array.from(sources).sort();
+  }, [designComponents, initialGlobalStates]); 
 
   useEffect(() => {
     const newInitialStates: Record<string, any> = {};
     let updateNeeded = false;
 
-    const currentDesignComponents = designComponents; // Capture current designComponents
-
     uniqueValueSources.forEach(sourceName => {
-      if (!valueSourceStates.hasOwnProperty(sourceName)) {
-        updateNeeded = true;
-        let initialValue: any = null;
+        if (!valueSourceStates.hasOwnProperty(sourceName)) { // Only initialize if not already present in live state
+            updateNeeded = true;
+            let valueToSet: any = null;
 
-        // Find the component that defines this valueSource to get its initial value
-        let compWithValueSource: CanvasComponent | undefined;
-        const findComp = (comps: CanvasComponent[]): CanvasComponent | undefined => {
-            for (const comp of comps) {
-                if (comp.props.valueSource === sourceName) return comp;
-                if (comp.children) {
-                    const foundInChildren = findComp(comp.children);
-                    if (foundInChildren) return foundInChildren;
+            if (initialGlobalStates.hasOwnProperty(sourceName)) {
+                valueToSet = initialGlobalStates[sourceName];
+            } else {
+                // This sourceName must have come from a component on the canvas. Find it to get its initial value.
+                const compDef = findCompBySource(designComponents, sourceName); 
+                if (compDef) {
+                    const compConfig = getComponentConfig(compDef.type);
+                    const props = compDef.props;
+                    if (compDef.type === 'progress') { valueToSet = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? 0); }
+                    else if (compDef.type === 'input' || compDef.type === 'textarea') { valueToSet = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? '');}
+                    else if (compDef.type === 'checkbox' || compDef.type === 'switch') { valueToSet = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);}
+                    else if (compDef.type === 'label') { valueToSet = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');}
+                    // Fallback for other potential value-holding components if not covered above
+                    else if (props.value !== undefined) valueToSet = props.value;
+                    else if (props.checked !== undefined) valueToSet = props.checked;
+                    else if (compConfig?.propTypes.value?.defaultValue !== undefined) valueToSet = compConfig.propTypes.value.defaultValue;
+                    else if (compConfig?.propTypes.checked?.defaultValue !== undefined) valueToSet = compConfig.propTypes.checked.defaultValue;
+                    else if (compConfig?.propTypes.children?.defaultValue !== undefined) valueToSet = String(compConfig.propTypes.children.defaultValue);
+                    else valueToSet = null; // Final fallback if no default found
+                } else {
+                    valueToSet = null; // Fallback if no component defines this sourceName (should not happen if not in global)
                 }
             }
-            return undefined;
-        };
-        compWithValueSource = findComp(currentDesignComponents); // Use captured components
-
-        if (compWithValueSource) {
-          const compConfig = getComponentConfig(compWithValueSource.type);
-          const props = compWithValueSource.props;
-
-          // Determine initial value based on component type and its relevant prop
-          if (compWithValueSource.type === 'progress') {
-            initialValue = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? 0);
-          } else if (compWithValueSource.type === 'input' || compWithValueSource.type === 'textarea') {
-            initialValue = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? '');
-          } else if (compWithValueSource.type === 'checkbox' || compWithValueSource.type === 'switch') {
-             initialValue = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);
-          } else if (compWithValueSource.type === 'label') {
-             initialValue = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');
-          }
-           else { // Fallback for other potential value-holding components
-            if (props.value !== undefined) initialValue = props.value;
-            else if (props.checked !== undefined) initialValue = props.checked;
-            else if (compConfig?.propTypes.value?.defaultValue !== undefined) initialValue = compConfig.propTypes.value.defaultValue;
-            else if (compConfig?.propTypes.checked?.defaultValue !== undefined) initialValue = compConfig.propTypes.checked.defaultValue;
-            else if (compConfig?.propTypes.children?.defaultValue !== undefined) initialValue = String(compConfig.propTypes.children.defaultValue);
-            else initialValue = null; // Default to null if no specific initial value found
-          }
+            newInitialStates[sourceName] = valueToSet;
         }
-        newInitialStates[sourceName] = initialValue;
-      }
     });
 
     if (updateNeeded) {
-      setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
+        setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources]); // Only depend on uniqueValueSources
+  }, [uniqueValueSources, initialGlobalStates, designComponents, valueSourceStates]);
+
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
     const setters: AvailableSetters = {};
@@ -413,14 +405,14 @@ const DesignPreviewRenderer: React.FC = () => {
     position: 'relative',
     backgroundColor: 'hsl(var(--background))',
     boxShadow: '0 0 10px rgba(0,0,0,0.1)',
-    margin: 'auto', // Center the preview area if smaller than scroll area
+    margin: 'auto', 
   };
 
   return (
-    <ScrollArea className="w-full h-full bg-muted/20"> {/* Ensure ScrollArea takes full space */}
+    <ScrollArea className="w-full h-full bg-muted/20"> 
         <div style={previewContainerStyle}>
-            {designComponents.filter(c => !c.parentId) // Only render top-level components directly
-            .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)) // Sort by zIndex
+            {designComponents.filter(c => !c.parentId) 
+            .sort((a,b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)) 
             .map((comp) => (
             <div
                 key={`preview-top-${comp.id}`}
@@ -442,3 +434,4 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
+

@@ -24,11 +24,16 @@ import {
   IconTable,
   IconTabs,
   IconTextarea,
+  IconPuzzlePiece, // Generic icon for custom components
 } from './icons';
+
+// Import config for custom components
+import { componentConfig as ExampleCounterConfig } from '@/custom-components/ExampleCounter';
 
 export const GRID_SIZE = 20;
 
 export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
+  // Built-in ShadCN components
   {
     id: 'button',
     name: 'Button',
@@ -314,6 +319,16 @@ export const AVAILABLE_COMPONENTS: AvailableComponent[] = [
       placeholder: { type: 'string', defaultValue: 'Type your message here.', label: 'Placeholder' },
       valueSource: { type: 'string', label: 'Value Source (State Var)', defaultValue: '' },
     },
+  },
+  // Custom Components
+  {
+    id: ExampleCounterConfig.id, // 'custom_ExampleCounter'
+    name: ExampleCounterConfig.name,
+    icon: IconPuzzlePiece, // Generic icon for custom components
+    defaultProps: ExampleCounterConfig.defaultProps,
+    defaultSize: ExampleCounterConfig.defaultSize,
+    propTypes: ExampleCounterConfig.propTypes,
+    isCustom: true,
   },
 ];
 

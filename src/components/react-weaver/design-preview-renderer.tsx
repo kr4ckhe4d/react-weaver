@@ -29,6 +29,14 @@ import type { AvailableSetters } from '@/app-logic/types';
 // Directly import the known app-logic modules
 import * as exampleActionsModule from '@/app-logic/exampleActions';
 
+// Import Custom Components
+import ExampleCounter from '@/custom-components/ExampleCounter';
+
+// Map of custom components for dynamic rendering in preview
+const CustomComponentPreviewMap: Record<string, React.FC<any>> = {
+  'custom_ExampleCounter': ExampleCounter,
+};
+
 const appLogicModules: Record<string, Record<string, (...args: any[]) => any>> = {
   exampleActions: exampleActionsModule,
 };
@@ -63,6 +71,8 @@ const RenderPreviewComponentRecursive: React.FC<{
   } : {};
 
   let liveValue: any;
+  let liveOnCountChange: any; // For custom counter example
+
   if (props.valueSource && valueSourceStates.hasOwnProperty(props.valueSource)) {
     liveValue = valueSourceStates[props.valueSource];
   } else {
@@ -76,6 +86,17 @@ const RenderPreviewComponentRecursive: React.FC<{
         case 'progress': liveValue = props.value !== undefined ? props.value : 0; break; 
     }
   }
+  
+  // Example for custom component with specific prop handling for preview
+  if (type === 'custom_ExampleCounter' && props.valueSource) {
+    commonProps.externalValue = liveValue; // Map valueSource to externalValue prop
+    const setter = getSetterForValueSource(props.valueSource);
+    if (setter) {
+      // This makes the custom counter update the shared state
+      commonProps.onCountChange = (newCount: number) => setter(newCount);
+    }
+  }
+
 
   const [accordionValue, setAccordionValue] = useState<string | string[] | undefined>(props.type === 'multiple' ? [] : props.defaultValue);
   const [radioValue, setRadioValue] = useState<string | undefined>(props.defaultValue);
@@ -121,6 +142,15 @@ const RenderPreviewComponentRecursive: React.FC<{
     const setterName = `set${valueSourceName.charAt(0).toUpperCase() + valueSourceName.slice(1)}`;
     return allSetters[setterName];
   };
+  
+  if (type.startsWith('custom_')) {
+    const CustomComp = CustomComponentPreviewMap[type];
+    if (CustomComp) {
+      // Pass commonProps which might have been augmented (e.g., for externalValue, onCountChange)
+      return <CustomComp {...commonProps} style={childStyle} />;
+    }
+    return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2" style={childStyle}>Unknown custom component: {type}</div>;
+  }
 
   switch (type) {
     case 'button':
@@ -369,8 +399,11 @@ const DesignPreviewRenderer: React.FC = () => {
                     else if (compDef.type === 'input' || compDef.type === 'textarea') { valueToSet = props.value !== undefined ? props.value : (compConfig?.propTypes.value?.defaultValue ?? '');}
                     else if (compDef.type === 'checkbox' || compDef.type === 'switch') { valueToSet = props.checked !== undefined ? props.checked : (compConfig?.propTypes.checked?.defaultValue ?? false);}
                     else if (compDef.type === 'label') { valueToSet = props.children !== undefined ? String(props.children) : (compConfig?.propTypes.children?.defaultValue ?? '');}
-                    else if (props.value !== undefined) valueToSet = props.value;
-                    else if (props.checked !== undefined) valueToSet = props.checked;
+                    else if (props.value !== undefined) valueToSet = props.value; // Generic fallback for value prop
+                    else if (props.checked !== undefined) valueToSet = props.checked; // Generic fallback for checked prop
+                    else if (compConfig?.isCustom && compDef.type === 'custom_ExampleCounter' && props.initialCount !== undefined) { // Example for custom component default
+                        valueToSet = props.initialCount;
+                    }
                     else if (compConfig?.propTypes.value?.defaultValue !== undefined) valueToSet = compConfig.propTypes.value.defaultValue;
                     else if (compConfig?.propTypes.checked?.defaultValue !== undefined) valueToSet = compConfig.propTypes.checked.defaultValue;
                     else if (compConfig?.propTypes.children?.defaultValue !== undefined) valueToSet = String(compConfig.propTypes.children.defaultValue);
@@ -386,7 +419,8 @@ const DesignPreviewRenderer: React.FC = () => {
     if (updateNeeded) {
         setValueSourceStates(prevStates => ({ ...prevStates, ...newInitialStates }));
     }
-  }, [uniqueValueSources, initialGlobalStates, designComponents, valueSourceStates]);
+  // Removed valueSourceStates from dependency array as per previous refinement
+  }, [uniqueValueSources, initialGlobalStates, designComponents]);
 
 
   const allSettersForActions = useMemo<AvailableSetters>(() => {
@@ -443,4 +477,3 @@ const DesignPreviewRenderer: React.FC = () => {
 };
 
 export default DesignPreviewRenderer;
-

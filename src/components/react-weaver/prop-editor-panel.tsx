@@ -16,6 +16,8 @@ import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import * as exampleActionsModule from '@/app-logic/exampleActions';
 
+const NONE_ACTION_VALUE = "_SELECT_NONE_"; // Special value for "None / Manual"
+
 const PropEditorPanel: React.FC = () => {
   const { selectedComponentId, components, updateComponentProps, deleteComponent, bringToFront, sendToBack } = useDesign();
   const selectedComponent = components.find(comp => comp.id === selectedComponentId);
@@ -23,7 +25,12 @@ const PropEditorPanel: React.FC = () => {
 
   const handleInputChange = (propName: string, value: any) => {
     if (!selectedComponentId) return;
-    updateComponentProps(selectedComponentId, { [propName]: value });
+    // If the special "none" value is received for onClickAction, store it as an empty string
+    if (propName === 'onClickAction' && value === NONE_ACTION_VALUE) {
+      updateComponentProps(selectedComponentId, { [propName]: '' });
+    } else {
+      updateComponentProps(selectedComponentId, { [propName]: value });
+    }
   };
 
   const renderPropField = (propName: string, propDef: PropDefinition, currentValue: any) => {
@@ -53,15 +60,20 @@ const PropEditorPanel: React.FC = () => {
         );
       case 'select':
         let finalOptions: string[] = propDef.options || [];
+        let displayValue = currentValue ?? propDef.defaultValue ?? '';
+
         if (selectedComponent?.type === 'button' && propName === 'onClickAction') {
           const exampleModuleOptions = Object.keys(exampleActionsModule)
             .filter(moduleKey => typeof exampleActionsModule[moduleKey as keyof typeof exampleActionsModule] === 'function')
             .map(funcName => `exampleActions/${funcName}`);
-          finalOptions = ['', ...exampleModuleOptions]; // Add "None" option and then example actions
+          finalOptions = [NONE_ACTION_VALUE, ...exampleModuleOptions];
+          if (displayValue === '') {
+            displayValue = NONE_ACTION_VALUE;
+          }
         }
         return (
           <Select
-            value={currentValue ?? propDef.defaultValue ?? ''}
+            value={displayValue}
             onValueChange={(value) => handleInputChange(propName, value)}
           >
             <SelectTrigger id={key} className="mt-1">
@@ -70,7 +82,7 @@ const PropEditorPanel: React.FC = () => {
             <SelectContent>
               {finalOptions.map(option => (
                 <SelectItem key={option} value={option}>
-                  {option === '' ? 'None / Manual' : option}
+                  {option === NONE_ACTION_VALUE ? 'None / Manual' : option}
                 </SelectItem>
               ))}
             </SelectContent>

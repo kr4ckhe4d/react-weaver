@@ -31,4 +31,5 @@ export interface AvailableComponent {
   propTypes: Record<string, PropDefinition>;
   isContainer?: boolean; // Indicates if this component can host children
   isCustom?: boolean; // Flag to identify custom components
+  category?: string; // Category for grouping in the library
 }

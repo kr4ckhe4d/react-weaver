@@ -34,6 +34,7 @@ import {
   GalleryHorizontal, // For Tabs component
   FileText, // For Textarea
   PanelRightOpen, // For Accordion
+  Puzzle, // Icon for custom components
 } from 'lucide-react';
 
 // General UI Icons
@@ -79,3 +80,6 @@ export const IconSkeleton = RectangleHorizontal;
 export const IconTable = LucideTable;
 export const IconTabs = GalleryHorizontal;
 export const IconTextarea = FileText;
+
+// Icon for Custom Components
+export const IconPuzzlePiece = Puzzle;

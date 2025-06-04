@@ -30,4 +30,6 @@ export interface AvailableComponent {
   defaultSize: { width: number; height: number };
   propTypes: Record<string, PropDefinition>;
   isContainer?: boolean; // Indicates if this component can host children
+  isCustom?: boolean; // Flag to identify custom components
+  category?: string; // Category for grouping in the library
 }

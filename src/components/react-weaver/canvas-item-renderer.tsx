@@ -30,6 +30,14 @@ import { Table, TableBody, TableCell, TableCaption, TableHead, TableHeader, Tabl
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 
+// Import Custom Components
+import ExampleCounter from '@/custom-components/ExampleCounter';
+
+// Map of custom components for dynamic rendering
+const CustomComponentMap: Record<string, React.FC<any>> = {
+  'custom_ExampleCounter': ExampleCounter,
+};
+
 
 interface CanvasItemRendererProps {
   component: CanvasComponent;
@@ -61,6 +69,16 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
     event.stopPropagation();
   };
   
+  if (type.startsWith('custom_')) {
+    const CustomComp = CustomComponentMap[type];
+    if (CustomComp) {
+      // For custom components, we pass all props directly.
+      // The custom component itself should handle its props.
+      return <CustomComp {...commonProps} />;
+    }
+    return <div className="w-full h-full bg-destructive/20 border border-destructive text-destructive-foreground flex items-center justify-center p-2">Unknown custom component: {type}</div>;
+  }
+
   switch (type) {
     case 'button':
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -71,7 +89,18 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
       const { valueSource: _valueSourceInput, ...inputRenderProps } = commonProps;
       return <Input {...inputRenderProps} className={cn("w-full h-full", props.className)} />;
     case 'text':
-      return <p {...commonProps} className={cn("p-1 select-none", props.className)}>{props.children || 'Text Block'}</p>;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { textAlign, fontWeight, fontSize, customTextColor, customBackgroundColor, className: userClassName, ...textRenderProps } = commonProps;
+      const style: React.CSSProperties = {};
+      if (customTextColor) style.color = customTextColor;
+      if (customBackgroundColor) style.backgroundColor = customBackgroundColor;
+
+      const textClasses: string[] = [];
+      if (textAlign) textClasses.push(`text-${textAlign}`);
+      if (fontWeight && fontWeight !== 'normal') textClasses.push(`font-${fontWeight}`);
+      if (fontSize) textClasses.push(fontSize);
+      
+      return <p {...textRenderProps} style={style} className={cn("p-1 select-none", ...textClasses, userClassName)}>{props.children || 'Text Block'}</p>;
     case 'card':
       return (
         <ShadCard {...commonProps} className={cn("w-full h-full overflow-hidden flex flex-col", props.className)}>
@@ -148,8 +177,8 @@ const CanvasItemRendererInner: React.FC<CanvasItemRendererProps & { designContex
       return <Label className={cn("p-1", props.className)} {...labelRenderProps}>{props.children || 'Label'}</Label>;
     case 'progress':
        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { valueSource: _valueSourceProgress, ...progressRenderProps } = commonProps;
-      return <Progress {...progressRenderProps} className={cn("w-full", props.className)} />;
+      const { valueSource: _valueSourceProgress, value: _staticValue, ...progressRenderProps } = commonProps;
+      return <Progress value={props.value} {...progressRenderProps} className={cn("w-full", props.className)} />;
     case 'radioGroup':
       return (
         <RadioGroup defaultValue={props.defaultValue} className={cn("p-2 space-y-2", props.className)} {...commonProps}>
@@ -262,6 +291,21 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
       return; 
     }
     
+    // Allow interaction with inner elements of custom components
+    const isCustomComponent = component.type.startsWith('custom_');
+    if (isCustomComponent) {
+       const interactiveParentInCustom = targetElement.closest('button, input, textarea, select, [role="button"], [role="tab"], [role="radio"]');
+       if (interactiveParentInCustom) {
+           if (!isSelected) {
+             selectComponent(component.id);
+             if (!component.parentId) bringToFront(component.id);
+           }
+           // Do not preventDefault or stopPropagation if an interactive child within a custom component was clicked
+           return;
+       }
+    }
+
+
     const interactiveParent = targetElement.closest('button, input, textarea, select, [role="button"], [role="tab"], [role="radio"]');
     const componentRootElement = targetElement.closest<HTMLElement>('[data-component-id]');
 
@@ -394,6 +438,15 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
                 if (targetElement.closest('.react-resizable-handle')) {
                     return;
                 }
+
+                const isCustomComponentInnerClick = component.type.startsWith('custom_') && targetElement.closest('button, input, textarea, select');
+                if (isCustomComponentInnerClick) {
+                     if (component.id !== selectedComponentId) {
+                        selectComponent(component.id);
+                        if (!component.parentId) bringToFront(component.id);
+                    }
+                    return; // Don't propagate if it's an interactive element inside a custom component
+                }
                 
                 const clickedComponentElement = targetElement.closest<HTMLElement>('[data-component-id]');
                 
@@ -446,4 +499,3 @@ const CanvasItemRenderer: React.FC<CanvasItemRendererProps> = ({ component }) =>
 };
 
 export default CanvasItemRenderer;
-
